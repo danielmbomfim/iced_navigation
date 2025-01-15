@@ -1,8 +1,12 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 
-use components::StackFrame;
+use stack_navigation::StackFrame;
 
-mod components;
+pub mod stack_navigation;
+
+pub mod components {
+    pub mod header;
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum NavigatorType {
@@ -36,19 +40,18 @@ pub trait PageComponent<M> {
 pub struct Navigator<'a, M, K>
 where
     M: From<NavigationAction<M, K>> + Clone + 'a,
-    K: Into<Box<dyn PageComponent<M>>> + Eq + PartialEq + Hash + Debug + Copy + 'a,
+    K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy + 'a,
 {
     navigation_type: NavigatorType,
     current_page: K,
     pages: HashMap<K, Box<dyn PageComponent<M> + 'a>>,
     history: Vec<K>,
-    _marker: PhantomData<M>,
 }
 
 impl<'a, M, K> Navigator<'a, M, K>
 where
     M: From<NavigationAction<M, K>> + Clone + 'a,
-    K: Into<Box<dyn PageComponent<M>>> + Eq + PartialEq + Hash + Debug + Copy + 'a,
+    K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy + 'a,
 {
     pub fn new(navigation_type: NavigatorType, initial_page: K) -> Self {
         let mut navigator = Self {
@@ -56,7 +59,6 @@ where
             pages: HashMap::new(),
             current_page: initial_page,
             history: Vec::new(),
-            _marker: PhantomData,
         };
 
         navigator
