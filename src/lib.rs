@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash};
 
 use stack_navigation::StackFrame;
 
@@ -15,13 +15,15 @@ pub enum NavigatorType {
 }
 
 #[derive(Debug, Clone)]
-pub enum NavigationAction<M, P>
-where
-    M: From<NavigationAction<M, P>>,
-{
+pub enum NavigationAction<P> {
     Navigate(P),
     GoBack,
-    _Marker(PhantomData<M>),
+}
+
+pub trait NavigationConvertible {
+    type PageMapper;
+
+    fn from_action(action: NavigationAction<Self::PageMapper>) -> Self;
 }
 
 pub trait PageComponent<M> {
@@ -39,7 +41,7 @@ pub trait PageComponent<M> {
 
 pub struct Navigator<'a, M, K>
 where
-    M: From<NavigationAction<M, K>> + Clone + 'a,
+    M: NavigationConvertible + Clone + 'a,
     K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy + 'a,
 {
     navigation_type: NavigatorType,
@@ -50,7 +52,7 @@ where
 
 impl<'a, M, K> Navigator<'a, M, K>
 where
-    M: From<NavigationAction<M, K>> + Clone + 'a,
+    M: NavigationConvertible + Clone + 'a,
     K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy + 'a,
 {
     pub fn new(navigation_type: NavigatorType, initial_page: K) -> Self {
@@ -68,7 +70,7 @@ where
         navigator
     }
 
-    pub fn handle_actions(&mut self, message: NavigationAction<M, K>) -> iced::Task<M> {
+    pub fn handle_actions(&mut self, message: NavigationAction<K>) -> iced::Task<M> {
         match message {
             NavigationAction::Navigate(page) => {
                 if !self.pages.contains_key(&page) {
@@ -97,7 +99,6 @@ where
 
                 iced::Task::none()
             }
-            NavigationAction::_Marker(_) => iced::Task::none(),
         }
     }
 

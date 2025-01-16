@@ -1,10 +1,10 @@
 use iced::widget::column;
 
-use crate::{components::header::Header, PageComponent};
+use crate::{components::header::Header, NavigationConvertible, PageComponent};
 
 pub(crate) struct StackFrame<M>
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     header: Header<M>,
     widget: Box<dyn PageComponent<M>>,
@@ -12,7 +12,7 @@ where
 
 impl<M> StackFrame<M>
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     pub fn new(widget: Box<dyn PageComponent<M>>) -> Self {
         Self {
@@ -32,7 +32,7 @@ where
 
 impl<M> PageComponent<M> for StackFrame<M>
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     fn update(&mut self, message: M) -> iced::Task<M> {
         self.widget.update(message)

@@ -4,6 +4,8 @@ use iced::{
 };
 use iced_font_awesome::fa_icon_solid;
 
+use crate::{NavigationAction, NavigationConvertible};
+
 pub struct HeaderSettings {
     pub height: Length,
     pub background_color: Color,
@@ -56,7 +58,7 @@ impl Default for ButtonSettings {
 
 pub trait HeaderButtonElement<M>
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, M>
     where
@@ -78,7 +80,7 @@ pub struct Header<M> {
 
 impl<M> Header<M>
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     pub fn new(title: String) -> Self {
         Self {
@@ -154,7 +156,7 @@ impl BackButton {
 
 impl<M> HeaderButtonElement<M> for BackButton
 where
-    M: Clone,
+    M: Clone + NavigationConvertible,
 {
     fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, M>
     where
@@ -165,6 +167,7 @@ where
                 .color(settings.icon_color)
                 .size(settings.icon_size),
         )
+        .on_press(M::from_action(NavigationAction::GoBack))
         .width(settings.width)
         .height(settings.height)
         .into()
