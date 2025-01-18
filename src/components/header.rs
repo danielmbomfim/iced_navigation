@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use iced::{
     widget::{button, container, horizontal_space, text, Row},
     Alignment, Color, Length, Pixels,
@@ -75,7 +77,7 @@ pub struct Header<M> {
     back_button: Box<dyn HeaderButtonElement<M>>,
     right_button: Option<Box<dyn HeaderButtonElement<M>>>,
     settings: HeaderSettings,
-    pub(crate) show_left_button: bool,
+    show_left_button: RefCell<bool>,
 }
 
 impl<M> Header<M>
@@ -89,12 +91,34 @@ where
             back_button: Box::new(BackButton::new()),
             right_button: None,
             settings: HeaderSettings::default(),
-            show_left_button: true,
+            show_left_button: RefCell::new(true),
         }
     }
 
+    pub fn set_settings(&mut self, settings: Option<HeaderSettings>) {
+        self.settings = settings.unwrap_or_else(HeaderSettings::default);
+    }
+
+    pub fn hide_left_button(&self, hide: bool) {
+        let mut value = self.show_left_button.borrow_mut();
+
+        *value = hide;
+    }
+
+    pub fn set_back_button(&mut self, button: Box<dyn HeaderButtonElement<M>>) {
+        self.back_button = button;
+    }
+
+    pub fn set_right_button(&mut self, button: Box<dyn HeaderButtonElement<M>>) {
+        self.right_button = Some(button);
+    }
+
+    pub fn set_title_widget(&mut self, title: Box<dyn HeaderTitleElement<M>>) {
+        self.title_widget = title;
+    }
+
     fn render_back_button(&self) -> Option<iced::Element<M>> {
-        if !self.show_left_button {
+        if !*self.show_left_button.borrow() {
             return None;
         }
 
