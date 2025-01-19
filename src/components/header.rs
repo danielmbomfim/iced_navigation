@@ -10,12 +10,13 @@ use crate::{NavigationAction, NavigationConvertible};
 
 pub struct HeaderSettings {
     pub height: Length,
-    pub background_color: Color,
+    pub background_color: Option<Color>,
     pub button_settings: ButtonSettings,
     pub title_settings: TitleSettings,
 }
 
 pub struct ButtonSettings {
+    pub background_color: Option<Color>,
     pub height: Length,
     pub width: Length,
     pub icon_color: Color,
@@ -23,7 +24,7 @@ pub struct ButtonSettings {
 }
 
 pub struct TitleSettings {
-    pub title_color: Color,
+    pub title_color: Option<Color>,
     pub title_size: Pixels,
 }
 
@@ -31,7 +32,7 @@ impl Default for HeaderSettings {
     fn default() -> Self {
         Self {
             height: Length::from(50),
-            background_color: Color::TRANSPARENT,
+            background_color: None,
             button_settings: ButtonSettings::default(),
             title_settings: TitleSettings::default(),
         }
@@ -41,7 +42,7 @@ impl Default for HeaderSettings {
 impl Default for TitleSettings {
     fn default() -> Self {
         Self {
-            title_color: Color::WHITE,
+            title_color: None,
             title_size: Pixels::from(18),
         }
     }
@@ -54,6 +55,7 @@ impl Default for ButtonSettings {
             width: Length::from(40),
             icon_color: Color::WHITE,
             icon_size: 20.0,
+            background_color: None,
         }
     }
 }
@@ -146,7 +148,7 @@ where
                 .align_y(Alignment::Center),
         )
         .style(|_style| container::Style {
-            background: Some(iced::Background::Color(self.settings.background_color)),
+            background: self.settings.background_color.map(iced::Background::Color),
             ..Default::default()
         })
         .into()
@@ -165,7 +167,7 @@ impl<M> HeaderTitleElement<M> for Title {
     fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<M> {
         text(title)
             .size(settings.title_size)
-            .color(settings.title_color)
+            .color_maybe(settings.title_color)
             .into()
     }
 }
@@ -186,12 +188,36 @@ where
     where
         M: 'a,
     {
+        let background = settings.background_color;
+
         button(
             fa_icon_solid("angle-left")
                 .color(settings.icon_color)
                 .size(settings.icon_size),
         )
         .on_press(M::from_action(NavigationAction::GoBack))
+        .style(move |_theme, status| match status {
+            button::Status::Active | button::Status::Pressed => button::Style {
+                background: background.map(iced::Background::Color),
+                ..Default::default()
+            },
+            button::Status::Hovered => button::Style {
+                background: background.map(|mut color| {
+                    color.a = 0.6;
+
+                    iced::Background::Color(color)
+                }),
+                ..Default::default()
+            },
+            button::Status::Disabled => button::Style {
+                background: background.map(|mut color| {
+                    color.a = 0.3;
+
+                    iced::Background::Color(color)
+                }),
+                ..Default::default()
+            },
+        })
         .width(settings.width)
         .height(settings.height)
         .into()
