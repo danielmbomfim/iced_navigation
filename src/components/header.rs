@@ -147,9 +147,12 @@ where
                 .height(self.settings.height)
                 .align_y(Alignment::Center),
         )
-        .style(|_style| container::Style {
-            background: self.settings.background_color.map(iced::Background::Color),
-            ..Default::default()
+        .style(|theme| {
+            container::background(
+                self.settings
+                    .background_color
+                    .unwrap_or(theme.palette().background),
+            )
         })
         .into()
     }
@@ -196,25 +199,31 @@ where
                 .size(settings.icon_size),
         )
         .on_press(M::from_action(NavigationAction::GoBack))
-        .style(move |_theme, status| match status {
+        .style(move |theme: &iced::Theme, status| match status {
             button::Status::Active | button::Status::Pressed => button::Style {
-                background: background.map(iced::Background::Color),
+                background: Some(iced::Background::Color(
+                    background.unwrap_or(theme.palette().primary),
+                )),
                 ..Default::default()
             },
             button::Status::Hovered => button::Style {
-                background: background.map(|mut color| {
+                background: {
+                    let mut color = background.unwrap_or(theme.palette().primary);
+
                     color.a = 0.6;
 
-                    iced::Background::Color(color)
-                }),
+                    Some(iced::Background::Color(color))
+                },
                 ..Default::default()
             },
             button::Status::Disabled => button::Style {
-                background: background.map(|mut color| {
+                background: {
+                    let mut color = background.unwrap_or(theme.palette().primary);
+
                     color.a = 0.3;
 
-                    iced::Background::Color(color)
-                }),
+                    Some(iced::Background::Color(color))
+                },
                 ..Default::default()
             },
         })

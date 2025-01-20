@@ -1,6 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-use iced::widget::column;
+use iced::{
+    widget::{column, container, Stack},
+    Element,
+};
 
 use crate::{
     components::header::{Header, HeaderSettings},
@@ -110,7 +113,20 @@ where
 
         header.hide_left_button(!self.history.is_empty());
 
-        column![header.view(), page.view()].into()
+        let history: Vec<Element<M>> = self
+            .history
+            .iter()
+            .map(|page| {
+                let (header, widget) = self.pages.get(page).unwrap();
+
+                container(wrap_page(column![header.view(), widget.view()].into())).into()
+            })
+            .collect();
+
+        Stack::new()
+            .extend(history)
+            .push(wrap_page(column![header.view(), page.view()].into()))
+            .into()
     }
 
     fn update(&mut self, message: M) -> iced::Task<M> {
@@ -121,4 +137,21 @@ where
 
         page.update(message)
     }
+}
+
+fn wrap_page<'a, M>(widget: iced::Element<'a, M>) -> iced::Element<'a, M>
+where
+    M: 'a,
+{
+    container(widget)
+        .style(|theme| {
+            container::background(iced::Background::Color(
+                if theme.extended_palette().is_dark {
+                    iced::Color::BLACK
+                } else {
+                    iced::Color::WHITE
+                },
+            ))
+        })
+        .into()
 }
