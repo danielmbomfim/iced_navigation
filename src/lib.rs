@@ -1,3 +1,4 @@
+use animation::Frame;
 use components::header::{HeaderButtonElement, HeaderSettings, HeaderTitleElement};
 pub use stack_navigatior::StackNavigator;
 
@@ -7,9 +8,12 @@ pub mod components {
     pub mod header;
 }
 
+pub(crate) mod animation;
+
 #[derive(Debug, Clone)]
 pub enum NavigationAction<P> {
     Navigate(P),
+    Tick(Frame),
     GoBack,
 }
 

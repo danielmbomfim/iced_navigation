@@ -1,11 +1,12 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, ops::Div};
 
 use iced::{
-    widget::{column, container, Stack},
-    Element,
+    widget::{column, container, horizontal_space, row, Stack},
+    Element, Length,
 };
 
 use crate::{
+    animation::Frame,
     components::header::{Header, HeaderSettings},
     NavigationAction, NavigationConvertible, PageComponent, StackNavigatorMapper,
 };
@@ -22,12 +23,14 @@ where
     current_page: K,
     pages: HashMap<K, (Header<M>, Box<dyn PageComponent<M>>)>,
     history: Vec<K>,
+    anim_value: f32,
+    transition: bool,
     settings: StackNavigatorSettings,
 }
 
 impl<M, K> StackNavigator<M, K>
 where
-    M: Clone + NavigationConvertible,
+    M: Clone + NavigationConvertible + Send + 'static,
     K: StackNavigatorMapper<Message = M> + Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
 {
     pub fn new(initial_page: K) -> Self {
@@ -35,6 +38,8 @@ where
             history: Vec::with_capacity(5),
             current_page: initial_page,
             pages: HashMap::new(),
+            anim_value: 0.0,
+            transition: false,
             settings: StackNavigatorSettings {
                 header_settings: None,
             },
@@ -63,7 +68,7 @@ where
 
                 self.history.push(old_page);
 
-                iced::Task::none()
+                self.start_new_page_animation()
             }
             NavigationAction::GoBack => {
                 if let Some(page) = self.history.pop() {
@@ -72,7 +77,27 @@ where
 
                 iced::Task::none()
             }
+            NavigationAction::Tick(mut frame) => {
+                frame.update();
+
+                self.anim_value = frame.get_value();
+
+                if frame.is_complete() {
+                    self.transition = false;
+
+                    return iced::Task::none();
+                }
+
+                iced::Task::done(M::from_action(NavigationAction::Tick(frame)))
+            }
         }
+    }
+
+    fn start_new_page_animation(&mut self) -> iced::Task<M> {
+        self.anim_value = 0.0;
+        self.transition = true;
+
+        iced::Task::done(M::from_action(NavigationAction::Tick(Frame::new())))
     }
 
     fn get_page(
@@ -125,7 +150,14 @@ where
 
         Stack::new()
             .extend(history)
-            .push(wrap_page(column![header.view(), page.view()].into()))
+            .push(row![
+                horizontal_space().width(if self.transition {
+                    Length::Fixed(1300.0 - (1300.0 * self.anim_value.div(100.0)))
+                } else {
+                    Length::Fixed(0.0)
+                }),
+                wrap_page(column![header.view(), page.view()].into())
+            ])
             .into()
     }
 
