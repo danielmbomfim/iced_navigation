@@ -1,13 +1,16 @@
-use std::{collections::HashMap, hash::Hash, ops::Div};
+use std::{collections::HashMap, hash::Hash};
 
 use iced::{
-    widget::{column, container, horizontal_space, row, Stack},
-    Element, Length,
+    widget::{column, Stack},
+    Element,
 };
 
 use crate::{
     animation::Frame,
-    components::header::{Header, HeaderSettings},
+    components::{
+        header::{Header, HeaderSettings},
+        stack_page_wrapper::stack_page_wrapper,
+    },
     NavigationAction, NavigationConvertible, PageComponent, StackNavigatorMapper,
 };
 
@@ -144,20 +147,20 @@ where
             .map(|page| {
                 let (header, widget) = self.pages.get(page).unwrap();
 
-                container(wrap_page(column![header.view(), widget.view()].into())).into()
+                stack_page_wrapper(column![header.view(), widget.view()])
+                    .active(false)
+                    .into()
             })
             .collect();
 
         Stack::new()
             .extend(history)
-            .push(row![
-                horizontal_space().width(if self.transition {
-                    Length::Fixed(1300.0 - (1300.0 * self.anim_value.div(100.0)))
-                } else {
-                    Length::Fixed(0.0)
-                }),
-                wrap_page(column![header.view(), page.view()].into())
-            ])
+            .push(
+                stack_page_wrapper(column![header.view(), page.view()])
+                    .reversed(true)
+                    .animated(self.transition)
+                    .progress(self.anim_value),
+            )
             .into()
     }
 
@@ -169,21 +172,4 @@ where
 
         page.update(message)
     }
-}
-
-fn wrap_page<'a, M>(widget: iced::Element<'a, M>) -> iced::Element<'a, M>
-where
-    M: 'a,
-{
-    container(widget)
-        .style(|theme| {
-            container::background(iced::Background::Color(
-                if theme.extended_palette().is_dark {
-                    iced::Color::BLACK
-                } else {
-                    iced::Color::WHITE
-                },
-            ))
-        })
-        .into()
 }

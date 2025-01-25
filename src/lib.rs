@@ -6,6 +6,7 @@ mod stack_navigatior;
 
 pub mod components {
     pub mod header;
+    pub(crate) mod stack_page_wrapper;
 }
 
 pub(crate) mod animation;
