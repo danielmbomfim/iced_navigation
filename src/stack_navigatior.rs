@@ -28,6 +28,7 @@ where
     history: Vec<K>,
     anim_value: f32,
     transition: bool,
+    going_back: bool,
     settings: StackNavigatorSettings,
 }
 
@@ -42,6 +43,7 @@ where
             current_page: initial_page,
             pages: HashMap::new(),
             anim_value: 0.0,
+            going_back: false,
             transition: false,
             settings: StackNavigatorSettings {
                 header_settings: None,
@@ -74,19 +76,27 @@ where
                 self.start_new_page_animation()
             }
             NavigationAction::GoBack => {
-                if let Some(page) = self.history.pop() {
-                    self.current_page = page;
-                }
-
-                iced::Task::none()
+                self.going_back = true;
+                self.start_go_back_animation()
             }
             NavigationAction::Tick(mut frame) => {
                 frame.update();
 
                 self.anim_value = frame.get_value();
+                let completed = frame.is_complete();
 
-                if frame.is_complete() {
+                if completed && self.going_back {
+                    self.going_back = false;
+
+                    if let Some(page) = self.history.pop() {
+                        self.current_page = page;
+                    }
+                }
+
+                if completed {
                     self.transition = false;
+
+                    if self.going_back {}
 
                     return iced::Task::none();
                 }
@@ -101,6 +111,15 @@ where
         self.transition = true;
 
         iced::Task::done(M::from_action(NavigationAction::Tick(Frame::new())))
+    }
+
+    fn start_go_back_animation(&mut self) -> iced::Task<M> {
+        self.anim_value = 100.0;
+        self.transition = true;
+
+        iced::Task::done(M::from_action(NavigationAction::Tick(
+            Frame::new().map(|value| (value - 100.0).abs()),
+        )))
     }
 
     fn get_page(
@@ -157,7 +176,7 @@ where
             .extend(history)
             .push(
                 stack_page_wrapper(column![header.view(), page.view()])
-                    .reversed(true)
+                    .active(!self.transition)
                     .animated(self.transition)
                     .progress(self.anim_value),
             )

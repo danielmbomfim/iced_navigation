@@ -2,20 +2,28 @@ use iced::time::{Duration, Instant};
 
 const DURATION: f32 = 0.2;
 
+#[allow(missing_debug_implementations)]
 #[derive(Debug, Clone)]
 pub struct Frame {
     start: Instant,
     percent: f32,
     duration: Duration,
+    f: Option<fn(f32) -> f32>,
 }
 
 impl Frame {
     pub fn new() -> Self {
         Self {
             start: Instant::now(),
-            percent: 0.0,
             duration: Duration::from_secs_f32(DURATION),
+            percent: 0.0,
+            f: None,
         }
+    }
+
+    pub fn map(mut self, f: fn(f32) -> f32) -> Self {
+        self.f = Some(f);
+        self
     }
 
     pub fn update(&mut self) {
@@ -29,6 +37,10 @@ impl Frame {
     }
 
     pub fn get_value(&self) -> f32 {
+        if let Some(f) = self.f {
+            return f(self.percent);
+        }
+
         self.percent
     }
 }

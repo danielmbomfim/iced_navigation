@@ -8,7 +8,7 @@ use iced::{
     },
     alignment, event, mouse, overlay,
     widget::container::{draw_background, layout, Style},
-    Background, Color, Element, Event, Length, Padding, Rectangle, Size, Theme, Vector,
+    Element, Event, Length, Padding, Rectangle, Size, Theme, Vector,
 };
 
 pub struct StackPageWrapper<'a, M, R>
@@ -19,7 +19,6 @@ where
     size: Size<Length>,
     progress: f32,
     active: bool,
-    reversed: bool,
     animated: bool,
 }
 
@@ -33,7 +32,6 @@ where
 
         Self {
             active: true,
-            reversed: false,
             animated: false,
             progress: 0.0,
             content,
@@ -56,18 +54,8 @@ where
             return self;
         }
 
-        self.progress = if self.reversed {
-            (progress - 100.0).abs()
-        } else {
-            progress
-        }
-        .div(100.0);
+        self.progress = (progress.div(100.0) - 1.0).abs();
 
-        self
-    }
-
-    pub fn reversed(mut self, reversed: bool) -> Self {
-        self.reversed = reversed;
         self
     }
 }
@@ -193,15 +181,7 @@ where
         background_bounds.x = bounds.width - background_bounds.width;
 
         let background = theme.palette().background;
-        let mut style = Style::default().background(background);
-
-        if background.a != 1.0 {
-            style = style.background(Background::Color(if theme.extended_palette().is_dark {
-                Color::BLACK
-            } else {
-                Color::WHITE
-            }));
-        }
+        let style = Style::default().background(background);
 
         if let Some(clipped_viewport) = bounds.intersection(viewport) {
             draw_background(renderer, &style, background_bounds);
