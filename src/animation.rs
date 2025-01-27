@@ -1,6 +1,6 @@
 use iced::time::{Duration, Instant};
 
-const DURATION: f32 = 0.2;
+const DURATION: f32 = 0.3;
 
 #[allow(missing_debug_implementations)]
 #[derive(Debug, Clone)]

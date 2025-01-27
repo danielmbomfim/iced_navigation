@@ -1,8 +1,8 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, ops::Div};
 
 use iced::{
-    widget::{column, Stack},
-    Element,
+    widget::{column, container, horizontal_space, Stack},
+    Element, Length,
 };
 
 use crate::{
@@ -174,6 +174,7 @@ where
 
         Stack::new()
             .extend(history)
+            .push(overlay(self.anim_value))
             .push(
                 stack_page_wrapper(column![header.view(), page.view()])
                     .active(!self.transition)
@@ -191,4 +192,24 @@ where
 
         page.update(message)
     }
+}
+
+fn overlay<'a, M>(progress: f32) -> iced::Element<'a, M>
+where
+    M: 'a,
+{
+    let opacity = progress.div(100.0) * 0.5;
+
+    container(horizontal_space())
+        .style(move |_theme| {
+            container::background(iced::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: opacity,
+            })
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
