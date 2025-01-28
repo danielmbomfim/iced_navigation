@@ -18,6 +18,14 @@ pub enum NavigationAction<P> {
     GoBack,
 }
 
+pub trait Navigator<K> {
+    fn is_on_page(&self, page: K) -> bool;
+
+    fn is_on_page_and<F: Fn() -> bool>(&self, page: K, f: F) -> bool;
+
+    fn clear_history(&mut self);
+}
+
 pub trait StackNavigatorMapper {
     type Message: Clone + NavigationConvertible;
 

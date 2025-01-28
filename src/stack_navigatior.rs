@@ -11,7 +11,7 @@ use crate::{
         header::{Header, HeaderSettings},
         stack_page_wrapper::stack_page_wrapper,
     },
-    NavigationAction, NavigationConvertible, PageComponent, StackNavigatorMapper,
+    NavigationAction, NavigationConvertible, Navigator, PageComponent, StackNavigatorMapper,
 };
 
 struct StackNavigatorSettings {
@@ -29,6 +29,7 @@ where
     anim_value: f32,
     transition: bool,
     going_back: bool,
+    reset_mode: bool,
     settings: StackNavigatorSettings,
 }
 
@@ -45,6 +46,7 @@ where
             anim_value: 0.0,
             going_back: false,
             transition: false,
+            reset_mode: false,
             settings: StackNavigatorSettings {
                 header_settings: None,
             },
@@ -91,6 +93,11 @@ where
                     if let Some(page) = self.history.pop() {
                         self.current_page = page;
                     }
+                }
+
+                if completed && self.reset_mode {
+                    self.reset_mode = false;
+                    self.history.clear();
                 }
 
                 if completed {
@@ -144,6 +151,24 @@ where
         }
 
         (header, widget)
+    }
+}
+
+impl<M, K> Navigator<K> for StackNavigator<M, K>
+where
+    M: Clone + NavigationConvertible + Send + 'static,
+    K: StackNavigatorMapper<Message = M> + Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
+{
+    fn clear_history(&mut self) {
+        self.reset_mode = true;
+    }
+
+    fn is_on_page(&self, page: K) -> bool {
+        self.current_page == page
+    }
+
+    fn is_on_page_and<F: Fn() -> bool>(&self, page: K, f: F) -> bool {
+        self.current_page == page && f()
     }
 }
 
