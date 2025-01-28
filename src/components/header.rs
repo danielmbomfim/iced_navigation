@@ -104,7 +104,7 @@ where
     pub fn hide_left_button(&self, hide: bool) {
         let mut value = self.show_left_button.borrow_mut();
 
-        *value = hide;
+        *value = !hide;
     }
 
     pub fn set_back_button(&mut self, button: Box<dyn HeaderButtonElement<M>>) {

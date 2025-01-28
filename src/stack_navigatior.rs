@@ -158,7 +158,7 @@ where
             .get(&self.current_page)
             .expect("page should have been initialized");
 
-        header.hide_left_button(!self.history.is_empty());
+        header.hide_left_button(self.reset_mode || self.history.is_empty());
 
         let history: Vec<Element<M>> = self
             .history
