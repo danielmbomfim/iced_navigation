@@ -151,7 +151,7 @@ where
             container::background(
                 self.settings
                     .background_color
-                    .unwrap_or(theme.palette().background),
+                    .unwrap_or(theme.palette().primary),
             )
         })
         .into()
@@ -168,9 +168,17 @@ impl Title {
 
 impl<M> HeaderTitleElement<M> for Title {
     fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<M> {
+        let text_color = settings.title_color;
+
         text(title)
             .size(settings.title_size)
-            .color_maybe(settings.title_color)
+            .style(move |theme: &iced::Theme| {
+                let pallete = theme.extended_palette();
+
+                text::Style {
+                    color: text_color.or_else(|| Some(pallete.primary.base.text)),
+                }
+            })
             .into()
     }
 }
