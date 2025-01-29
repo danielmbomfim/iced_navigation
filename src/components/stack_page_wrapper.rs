@@ -16,7 +16,6 @@ where
     R: Renderer,
 {
     content: Element<'a, M, Theme, R>,
-    size: Size<Length>,
     progress: f32,
     active: bool,
     animated: bool,
@@ -28,14 +27,12 @@ where
 {
     pub fn new(content: impl Into<Element<'a, M, Theme, R>>) -> Self {
         let content = content.into();
-        let size = content.as_widget().size_hint();
 
         Self {
             active: true,
             animated: false,
             progress: 0.0,
             content,
-            size,
         }
     }
 
@@ -81,17 +78,20 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        self.size
+        Size {
+            width: Length::Fill,
+            height: Length::Fill,
+        }
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &R, limits: &layout::Limits) -> layout::Node {
         layout(
             limits,
-            self.size.width.fluid(),
-            self.size.height.fluid(),
+            Length::Fill,
+            Length::Fill,
             f32::INFINITY,
             f32::INFINITY,
-            Padding::ZERO.left(self.progress * limits.max().width),
+            Padding::ZERO,
             alignment::Horizontal::Left,
             alignment::Vertical::Top,
             |limits| self.content.as_widget().layout(tree, renderer, limits),
@@ -174,30 +174,35 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut background_bounds = bounds.clone();
-        let inverted_progress = (self.progress - 1.0).abs();
-
-        background_bounds.width = bounds.width * inverted_progress;
-        background_bounds.x = bounds.width - background_bounds.width;
+        let container_width = bounds.width;
 
         let background = theme.palette().background;
         let style = Style::default().background(background);
 
-        if let Some(clipped_viewport) = bounds.intersection(viewport) {
-            draw_background(renderer, &style, background_bounds);
+        let Some(visible_bounds) = bounds.intersection(viewport) else {
+            return;
+        };
 
-            self.content.as_widget().draw(
-                tree,
-                renderer,
-                theme,
-                &renderer::Style {
-                    text_color: style.text_color.unwrap_or(renderer_style.text_color),
+        renderer.with_layer(visible_bounds, |renderer| {
+            renderer.with_translation(
+                Vector::new(container_width * self.progress, 0.0),
+                |renderer| {
+                    draw_background(renderer, &style, *viewport);
+
+                    self.content.as_widget().draw(
+                        tree,
+                        renderer,
+                        theme,
+                        &renderer::Style {
+                            text_color: style.text_color.unwrap_or(renderer_style.text_color),
+                        },
+                        layout.children().next().unwrap(),
+                        cursor,
+                        viewport,
+                    );
                 },
-                layout.children().next().unwrap(),
-                cursor,
-                &clipped_viewport,
             );
-        }
+        });
     }
 
     fn overlay<'b>(
