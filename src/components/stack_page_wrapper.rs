@@ -55,6 +55,16 @@ where
 
         self
     }
+
+    pub fn n_progress(mut self, progress: f32) -> Self {
+        if !self.animated {
+            return self;
+        }
+
+        self.progress = progress.div(100.0);
+
+        self
+    }
 }
 
 impl<'a, M, R> Widget<M, Theme, R> for StackPageWrapper<'a, M, R>

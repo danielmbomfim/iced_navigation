@@ -193,6 +193,8 @@ where
 
                 stack_page_wrapper(column![header.view(), widget.view()])
                     .active(false)
+                    .animated(self.transition)
+                    .n_progress(self.anim_value * -0.4)
                     .into()
             })
             .collect();
