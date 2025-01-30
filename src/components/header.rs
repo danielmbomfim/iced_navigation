@@ -19,7 +19,7 @@ pub struct ButtonSettings {
     pub background_color: Option<Color>,
     pub height: Length,
     pub width: Length,
-    pub icon_color: Color,
+    pub icon_color: Option<Color>,
     pub icon_size: f32,
 }
 
@@ -53,7 +53,7 @@ impl Default for ButtonSettings {
         Self {
             height: Length::from(30),
             width: Length::from(40),
-            icon_color: Color::WHITE,
+            icon_color: None,
             icon_size: 20.0,
             background_color: None,
         }
@@ -200,10 +200,17 @@ where
         Message: 'a,
     {
         let background = settings.background_color;
+        let icon_color = settings.icon_color;
 
         button(
             fa_icon_solid("angle-left")
-                .color(settings.icon_color)
+                .style(move |theme: &iced::Theme| {
+                    let pallete = theme.extended_palette();
+
+                    text::Style {
+                        color: icon_color.or_else(|| Some(pallete.primary.base.text)),
+                    }
+                })
                 .size(settings.icon_size),
         )
         .on_press(Message::from_action(NavigationAction::GoBack))
