@@ -60,31 +60,31 @@ impl Default for ButtonSettings {
     }
 }
 
-pub trait HeaderButtonElement<M>
+pub trait HeaderButtonElement<Message>
 where
-    M: Clone + NavigationConvertible,
+    Message: Clone + NavigationConvertible,
 {
-    fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, M>
+    fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, Message>
     where
-        M: 'a;
+        Message: 'a;
 }
 
-pub trait HeaderTitleElement<M> {
-    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<M>;
+pub trait HeaderTitleElement<Message> {
+    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<Message>;
 }
 
-pub struct Header<M> {
+pub struct Header<Message> {
     title: String,
-    title_widget: Box<dyn HeaderTitleElement<M>>,
-    back_button: Box<dyn HeaderButtonElement<M>>,
-    right_button: Option<Box<dyn HeaderButtonElement<M>>>,
+    title_widget: Box<dyn HeaderTitleElement<Message>>,
+    back_button: Box<dyn HeaderButtonElement<Message>>,
+    right_button: Option<Box<dyn HeaderButtonElement<Message>>>,
     settings: HeaderSettings,
     show_left_button: RefCell<bool>,
 }
 
-impl<M> Header<M>
+impl<Message> Header<Message>
 where
-    M: Clone + NavigationConvertible,
+    Message: Clone + NavigationConvertible,
 {
     pub fn new(title: String) -> Self {
         Self {
@@ -107,19 +107,19 @@ where
         *value = !hide;
     }
 
-    pub fn set_back_button(&mut self, button: Box<dyn HeaderButtonElement<M>>) {
+    pub fn set_back_button(&mut self, button: Box<dyn HeaderButtonElement<Message>>) {
         self.back_button = button;
     }
 
-    pub fn set_right_button(&mut self, button: Box<dyn HeaderButtonElement<M>>) {
+    pub fn set_right_button(&mut self, button: Box<dyn HeaderButtonElement<Message>>) {
         self.right_button = Some(button);
     }
 
-    pub fn set_title_widget(&mut self, title: Box<dyn HeaderTitleElement<M>>) {
+    pub fn set_title_widget(&mut self, title: Box<dyn HeaderTitleElement<Message>>) {
         self.title_widget = title;
     }
 
-    fn render_back_button(&self) -> Option<iced::Element<M>> {
+    fn render_back_button(&self) -> Option<iced::Element<Message>> {
         if !*self.show_left_button.borrow() {
             return None;
         }
@@ -127,7 +127,7 @@ where
         Some(self.back_button.view(&self.settings.button_settings))
     }
 
-    pub fn view(&self) -> iced::Element<M> {
+    pub fn view(&self) -> iced::Element<Message> {
         container(
             Row::new()
                 .push_maybe(self.render_back_button())
@@ -166,8 +166,8 @@ impl Title {
     }
 }
 
-impl<M> HeaderTitleElement<M> for Title {
-    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<M> {
+impl<Message> HeaderTitleElement<Message> for Title {
+    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<Message> {
         let text_color = settings.title_color;
 
         text(title)
@@ -191,13 +191,13 @@ impl BackButton {
     }
 }
 
-impl<M> HeaderButtonElement<M> for BackButton
+impl<Message> HeaderButtonElement<Message> for BackButton
 where
-    M: Clone + NavigationConvertible,
+    Message: Clone + NavigationConvertible,
 {
-    fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, M>
+    fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, Message>
     where
-        M: 'a,
+        Message: 'a,
     {
         let background = settings.background_color;
 
@@ -206,7 +206,7 @@ where
                 .color(settings.icon_color)
                 .size(settings.icon_size),
         )
-        .on_press(M::from_action(NavigationAction::GoBack))
+        .on_press(Message::from_action(NavigationAction::GoBack))
         .style(move |theme: &iced::Theme, status| match status {
             button::Status::Active | button::Status::Pressed => button::Style {
                 background: Some(iced::Background::Color(

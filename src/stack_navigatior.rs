@@ -18,14 +18,14 @@ struct StackNavigatorSettings {
     header_settings: Option<HeaderSettings>,
 }
 
-pub struct StackNavigator<M, K>
+pub struct StackNavigator<Message, PageMapper>
 where
-    M: Clone + NavigationConvertible,
-    K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
+    Message: Clone + NavigationConvertible,
+    PageMapper: Eq + Hash,
 {
-    current_page: K,
-    pages: HashMap<K, (Header<M>, Box<dyn PageComponent<M>>)>,
-    history: Vec<K>,
+    current_page: PageMapper,
+    pages: HashMap<PageMapper, (Header<Message>, Box<dyn PageComponent<Message>>)>,
+    history: Vec<PageMapper>,
     anim_value: f32,
     transition: bool,
     going_back: bool,
@@ -33,15 +33,15 @@ where
     settings: StackNavigatorSettings,
 }
 
-impl<M, K> StackNavigator<M, K>
+impl<Message, PageMapper> StackNavigator<Message, PageMapper>
 where
-    M: Clone + NavigationConvertible + Send + 'static,
-    K: StackNavigatorMapper<Message = M> + Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
+    Message: Clone + NavigationConvertible + Send + 'static,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash + Clone,
 {
-    pub fn new(initial_page: K) -> Self {
+    pub fn new(initial_page: PageMapper) -> Self {
         let mut navigator = Self {
             history: Vec::with_capacity(5),
-            current_page: initial_page,
+            current_page: initial_page.clone(),
             pages: HashMap::new(),
             anim_value: 0.0,
             going_back: false,
@@ -52,10 +52,10 @@ where
             },
         };
 
-        navigator.pages.insert(
-            initial_page,
-            navigator.get_page(initial_page, initial_page.into()),
-        );
+        let widget = initial_page.into_component();
+        let page = navigator.get_page(&initial_page, widget);
+
+        navigator.pages.insert(initial_page, page);
 
         navigator
     }
@@ -64,11 +64,12 @@ where
         self.settings.header_settings = Some(settings);
     }
 
-    pub fn handle_actions(&mut self, message: NavigationAction<K>) -> iced::Task<M> {
+    pub fn handle_actions(&mut self, message: NavigationAction<PageMapper>) -> iced::Task<Message> {
         match message {
             NavigationAction::Navigate(page) => {
                 if !self.pages.contains_key(&page) {
-                    self.pages.insert(page, self.get_page(page, page.into()));
+                    self.pages
+                        .insert(page.clone(), self.get_page(&page, page.into_component()));
                 }
 
                 let old_page = std::mem::replace(&mut self.current_page, page);
@@ -108,33 +109,33 @@ where
                     return iced::Task::none();
                 }
 
-                iced::Task::done(M::from_action(NavigationAction::Tick(frame)))
+                iced::Task::done(Message::from_action(NavigationAction::Tick(frame)))
             }
         }
     }
 
-    fn start_new_page_animation(&mut self) -> iced::Task<M> {
+    fn start_new_page_animation(&mut self) -> iced::Task<Message> {
         self.anim_value = 0.0;
         self.transition = true;
 
-        iced::Task::done(M::from_action(NavigationAction::Tick(Frame::new())))
+        iced::Task::done(Message::from_action(NavigationAction::Tick(Frame::new())))
     }
 
-    fn start_go_back_animation(&mut self) -> iced::Task<M> {
+    fn start_go_back_animation(&mut self) -> iced::Task<Message> {
         self.anim_value = 100.0;
         self.transition = true;
 
-        iced::Task::done(M::from_action(NavigationAction::Tick(
+        iced::Task::done(Message::from_action(NavigationAction::Tick(
             Frame::new().map(|value| (value - 100.0).abs()),
         )))
     }
 
     fn get_page(
         &self,
-        page: K,
-        widget: Box<dyn PageComponent<M>>,
-    ) -> (Header<M>, Box<dyn PageComponent<M>>) {
-        let mut header: Header<M> = Header::new(page.title());
+        page: &PageMapper,
+        widget: Box<dyn PageComponent<Message>>,
+    ) -> (Header<Message>, Box<dyn PageComponent<Message>>) {
+        let mut header: Header<Message> = Header::new(page.title());
 
         header.set_settings(page.settings());
 
@@ -157,7 +158,7 @@ where
 impl<M, K> Navigator<K> for StackNavigator<M, K>
 where
     M: Clone + NavigationConvertible + Send + 'static,
-    K: StackNavigatorMapper<Message = M> + Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
+    K: StackNavigatorMapper<Message = M> + Eq + Hash,
 {
     fn clear_history(&mut self) {
         self.reset_mode = true;
@@ -172,12 +173,12 @@ where
     }
 }
 
-impl<M, K> PageComponent<M> for StackNavigator<M, K>
+impl<Message, PageMapper> PageComponent<Message> for StackNavigator<Message, PageMapper>
 where
-    M: Clone + NavigationConvertible,
-    K: Into<Box<dyn PageComponent<M>>> + Eq + Hash + Copy,
+    Message: Clone + NavigationConvertible,
+    PageMapper: Eq + Hash,
 {
-    fn view(&self) -> iced::Element<M> {
+    fn view(&self) -> iced::Element<Message> {
         let (header, page) = self
             .pages
             .get(&self.current_page)
@@ -185,7 +186,7 @@ where
 
         header.hide_left_button(self.reset_mode || self.history.is_empty());
 
-        let history: Vec<Element<M>> = self
+        let history: Vec<Element<Message>> = self
             .history
             .iter()
             .map(|page| {
@@ -211,7 +212,7 @@ where
             .into()
     }
 
-    fn update(&mut self, message: M) -> iced::Task<M> {
+    fn update(&mut self, message: Message) -> iced::Task<Message> {
         let (_, page) = self
             .pages
             .get_mut(&self.current_page)
@@ -221,9 +222,9 @@ where
     }
 }
 
-fn overlay<'a, M>(progress: f32) -> iced::Element<'a, M>
+fn overlay<'a, Message>(progress: f32) -> iced::Element<'a, Message>
 where
-    M: 'a,
+    Message: 'a,
 {
     let opacity = progress.div(100.0) * 0.5;
 

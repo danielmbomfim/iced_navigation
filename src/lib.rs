@@ -12,16 +12,16 @@ pub mod components {
 pub(crate) mod animation;
 
 #[derive(Debug, Clone)]
-pub enum NavigationAction<P> {
-    Navigate(P),
+pub enum NavigationAction<PageMapper> {
+    Navigate(PageMapper),
     Tick(Frame),
     GoBack,
 }
 
-pub trait Navigator<K> {
-    fn is_on_page(&self, page: K) -> bool;
+pub trait Navigator<PageMapper> {
+    fn is_on_page(&self, page: PageMapper) -> bool;
 
-    fn is_on_page_and<F: Fn() -> bool>(&self, page: K, f: F) -> bool;
+    fn is_on_page_and<F: Fn() -> bool>(&self, page: PageMapper, f: F) -> bool;
 
     fn clear_history(&mut self);
 }
@@ -30,6 +30,8 @@ pub trait StackNavigatorMapper {
     type Message: Clone + NavigationConvertible;
 
     fn title(&self) -> String;
+
+    fn into_component(&self) -> Box<dyn PageComponent<Self::Message>>;
 
     fn settings(&self) -> Option<HeaderSettings> {
         None
@@ -54,8 +56,8 @@ pub trait NavigationConvertible {
     fn from_action(action: NavigationAction<Self::PageMapper>) -> Self;
 }
 
-pub trait PageComponent<M> {
-    fn view(&self) -> iced::Element<M>;
+pub trait PageComponent<Message> {
+    fn view(&self) -> iced::Element<Message>;
 
-    fn update(&mut self, message: M) -> iced::Task<M>;
+    fn update(&mut self, message: Message) -> iced::Task<Message>;
 }

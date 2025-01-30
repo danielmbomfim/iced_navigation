@@ -4,28 +4,28 @@ use iced::{
     advanced::{
         layout, renderer,
         widget::{tree, Operation, Tree},
-        Clipboard, Layout, Renderer, Shell, Widget,
+        Clipboard, Layout, Renderer as IcedRenderer, Shell, Widget,
     },
     alignment, event, mouse, overlay,
     widget::container::{draw_background, layout, Style},
     Element, Event, Length, Padding, Rectangle, Size, Theme, Vector,
 };
 
-pub struct StackPageWrapper<'a, M, R>
+pub struct StackPageWrapper<'a, Message, Renderer>
 where
-    R: Renderer,
+    Renderer: IcedRenderer,
 {
-    content: Element<'a, M, Theme, R>,
+    content: Element<'a, Message, Theme, Renderer>,
     progress: f32,
     active: bool,
     animated: bool,
 }
 
-impl<'a, M, R> StackPageWrapper<'a, M, R>
+impl<'a, Message, Renderer> StackPageWrapper<'a, Message, Renderer>
 where
-    R: Renderer,
+    Renderer: IcedRenderer,
 {
-    pub fn new(content: impl Into<Element<'a, M, Theme, R>>) -> Self {
+    pub fn new(content: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
         let content = content.into();
 
         Self {
@@ -67,9 +67,10 @@ where
     }
 }
 
-impl<'a, M, R> Widget<M, Theme, R> for StackPageWrapper<'a, M, R>
+impl<'a, Message, Renderer> Widget<Message, Theme, Renderer>
+    for StackPageWrapper<'a, Message, Renderer>
 where
-    R: Renderer,
+    Renderer: IcedRenderer,
 {
     fn tag(&self) -> tree::Tag {
         self.content.as_widget().tag()
@@ -94,7 +95,12 @@ where
         }
     }
 
-    fn layout(&self, tree: &mut Tree, renderer: &R, limits: &layout::Limits) -> layout::Node {
+    fn layout(
+        &self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
         layout(
             limits,
             Length::Fill,
@@ -112,7 +118,7 @@ where
         &self,
         tree: &mut Tree,
         layout: Layout<'_>,
-        renderer: &R,
+        renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
@@ -131,9 +137,9 @@ where
         event: Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        renderer: &R,
+        renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, M>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) -> event::Status {
         if !self.active {
@@ -158,7 +164,7 @@ where
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
-        renderer: &R,
+        renderer: &Renderer,
     ) -> mouse::Interaction {
         if !self.active {
             return mouse::Interaction::None;
@@ -176,7 +182,7 @@ where
     fn draw(
         &self,
         tree: &Tree,
-        renderer: &mut R,
+        renderer: &mut Renderer,
         theme: &Theme,
         renderer_style: &renderer::Style,
         layout: Layout<'_>,
@@ -219,9 +225,9 @@ where
         &'b mut self,
         tree: &'b mut Tree,
         layout: Layout<'_>,
-        renderer: &R,
+        renderer: &Renderer,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, M, Theme, R>> {
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
         self.content.as_widget_mut().overlay(
             tree,
             layout.children().next().unwrap(),
@@ -231,21 +237,24 @@ where
     }
 }
 
-impl<'a, M, R> From<StackPageWrapper<'a, M, R>> for Element<'a, M, Theme, R>
+impl<'a, Message, Renderer> From<StackPageWrapper<'a, Message, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
 where
-    M: 'a,
-    R: Renderer + 'a,
+    Message: 'a,
+    Renderer: IcedRenderer + 'a,
 {
-    fn from(column: StackPageWrapper<'a, M, R>) -> Element<'a, M, Theme, R> {
+    fn from(
+        column: StackPageWrapper<'a, Message, Renderer>,
+    ) -> Element<'a, Message, Theme, Renderer> {
         Element::new(column)
     }
 }
 
-pub fn stack_page_wrapper<'a, M, R>(
-    content: impl Into<Element<'a, M, Theme, R>>,
-) -> StackPageWrapper<'a, M, R>
+pub fn stack_page_wrapper<'a, Message, Renderer>(
+    content: impl Into<Element<'a, Message, Theme, Renderer>>,
+) -> StackPageWrapper<'a, Message, Renderer>
 where
-    R: Renderer,
+    Renderer: IcedRenderer,
 {
     StackPageWrapper::new(content)
 }
