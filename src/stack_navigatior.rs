@@ -7,16 +7,9 @@ use iced::{
 
 use crate::{
     animation::Frame,
-    components::{
-        header::{Header, HeaderSettings},
-        stack_page_wrapper::stack_page_wrapper,
-    },
+    components::{header::Header, stack_page_wrapper::stack_page_wrapper},
     NavigationAction, NavigationConvertible, Navigator, PageComponent, StackNavigatorMapper,
 };
-
-struct StackNavigatorSettings {
-    header_settings: Option<HeaderSettings>,
-}
 
 pub struct StackNavigator<Message, PageMapper>
 where
@@ -30,7 +23,6 @@ where
     transition: bool,
     going_back: bool,
     reset_mode: bool,
-    settings: StackNavigatorSettings,
 }
 
 impl<Message, PageMapper> StackNavigator<Message, PageMapper>
@@ -47,9 +39,6 @@ where
             going_back: false,
             transition: false,
             reset_mode: false,
-            settings: StackNavigatorSettings {
-                header_settings: None,
-            },
         };
 
         let widget = initial_page.into_component();
@@ -58,10 +47,6 @@ where
         navigator.pages.insert(initial_page, page);
 
         navigator
-    }
-
-    pub fn set_header_settings(&mut self, settings: HeaderSettings) {
-        self.settings.header_settings = Some(settings);
     }
 
     pub fn handle_actions(&mut self, message: NavigationAction<PageMapper>) -> iced::Task<Message> {
