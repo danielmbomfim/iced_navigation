@@ -140,20 +140,20 @@ where
     }
 }
 
-impl<M, K> Navigator<K> for StackNavigator<M, K>
+impl<Message, PageMapper> Navigator<PageMapper> for StackNavigator<Message, PageMapper>
 where
-    M: Clone + NavigationConvertible + Send + 'static,
-    K: StackNavigatorMapper<Message = M> + Eq + Hash,
+    Message: Clone + NavigationConvertible + Send + 'static,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash,
 {
     fn clear_history(&mut self) {
         self.reset_mode = true;
     }
 
-    fn is_on_page(&self, page: K) -> bool {
+    fn is_on_page(&self, page: PageMapper) -> bool {
         self.current_page == page
     }
 
-    fn is_on_page_and<F: Fn() -> bool>(&self, page: K, f: F) -> bool {
+    fn is_on_page_and<F: Fn() -> bool>(&self, page: PageMapper, f: F) -> bool {
         self.current_page == page && f()
     }
 }
@@ -161,7 +161,7 @@ where
 impl<Message, PageMapper> PageComponent<Message> for StackNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible,
-    PageMapper: Eq + Hash,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash,
 {
     fn view(&self) -> iced::Element<Message> {
         let (header, page) = self
@@ -169,7 +169,17 @@ where
             .get(&self.current_page)
             .expect("page should have been initialized");
 
-        header.hide_left_button(self.reset_mode || self.history.is_empty());
+        let header = if self
+            .current_page
+            .settings()
+            .is_none_or(|settings| settings.show_header)
+        {
+            header.hide_left_button(self.reset_mode || self.history.is_empty());
+
+            header.view()
+        } else {
+            horizontal_space().into()
+        };
 
         let history: Vec<Element<Message>> = self
             .history
@@ -177,7 +187,13 @@ where
             .map(|page| {
                 let (header, widget) = self.pages.get(page).unwrap();
 
-                stack_page_wrapper(column![header.view(), widget.view()])
+                let header = if page.settings().is_none_or(|settings| settings.show_header) {
+                    header.view()
+                } else {
+                    horizontal_space().into()
+                };
+
+                stack_page_wrapper(column![header, widget.view()])
                     .active(false)
                     .animated(self.transition)
                     .n_progress(self.anim_value * -0.4)
@@ -189,7 +205,7 @@ where
             .extend(history)
             .push(overlay(self.anim_value))
             .push(
-                stack_page_wrapper(column![header.view(), page.view()])
+                stack_page_wrapper(column![header, page.view()])
                     .active(!self.transition)
                     .animated(self.transition)
                     .progress(self.anim_value),

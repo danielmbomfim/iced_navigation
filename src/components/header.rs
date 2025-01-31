@@ -9,6 +9,7 @@ use iced_font_awesome::fa_icon_solid;
 use crate::{NavigationAction, NavigationConvertible};
 
 pub struct HeaderSettings {
+    pub show_header: bool,
     pub height: Length,
     pub background_color: Option<Color>,
     pub button_settings: ButtonSettings,
@@ -31,6 +32,7 @@ pub struct TitleSettings {
 impl Default for HeaderSettings {
     fn default() -> Self {
         Self {
+            show_header: true,
             height: Length::from(50),
             background_color: None,
             button_settings: ButtonSettings::default(),
