@@ -30,7 +30,7 @@ where
     Message: Clone + NavigationConvertible + Send + 'static,
     PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash + Clone,
 {
-    pub fn new(initial_page: PageMapper) -> Self {
+    pub fn new(initial_page: PageMapper) -> (Self, iced::Task<Message>) {
         let mut navigator = Self {
             history: Vec::with_capacity(5),
             current_page: initial_page.clone(),
@@ -42,26 +42,32 @@ where
         };
 
         let widget = initial_page.into_component();
+        let load_task = widget.on_load();
         let page = navigator.get_page(&initial_page, widget);
 
         navigator.pages.insert(initial_page, page);
 
-        navigator
+        (navigator, load_task)
     }
 
     pub fn handle_actions(&mut self, message: NavigationAction<PageMapper>) -> iced::Task<Message> {
         match message {
             NavigationAction::Navigate(page) => {
+                let mut load_task = iced::Task::none();
+
                 if !self.pages.contains_key(&page) {
+                    let widget = page.into_component();
+                    load_task = widget.on_load();
+
                     self.pages
-                        .insert(page.clone(), self.get_page(&page, page.into_component()));
+                        .insert(page.clone(), self.get_page(&page, widget));
                 }
 
                 let old_page = std::mem::replace(&mut self.current_page, page);
 
                 self.history.push(old_page);
 
-                self.start_new_page_animation()
+                iced::Task::batch([self.start_new_page_animation(), load_task])
             }
             NavigationAction::GoBack => {
                 self.going_back = true;

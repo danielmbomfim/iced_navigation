@@ -60,4 +60,8 @@ pub trait PageComponent<Message> {
     fn view(&self) -> iced::Element<Message>;
 
     fn update(&mut self, message: Message) -> iced::Task<Message>;
+
+    fn on_load(&self) -> iced::Task<Message> {
+        iced::Task::none()
+    }
 }

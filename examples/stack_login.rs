@@ -282,12 +282,9 @@ struct App {
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        (
-            Self {
-                nav: StackNavigator::new(Page::LoginPage),
-            },
-            Task::none(),
-        )
+        let (nav, task) = StackNavigator::new(Page::LoginPage);
+
+        (Self { nav }, task)
     }
     fn update(&mut self, message: Message) -> Task<Message> {
         if let Message::NavigationAction(action) = &message {
