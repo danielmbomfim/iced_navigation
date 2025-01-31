@@ -1,7 +1,7 @@
 use iced::{Element, Task};
 use iced_navigation::{
-    NavigationAction, NavigationConvertible, Navigator, PageComponent, StackNavigator,
-    StackNavigatorMapper,
+    components::header::HeaderSettings, NavigationAction, NavigationConvertible, Navigator,
+    PageComponent, StackNavigator, StackNavigatorMapper,
 };
 
 #[derive(Debug, Clone)]
@@ -43,6 +43,16 @@ impl StackNavigatorMapper for Page {
             Page::HomePage(name) => Box::new(home::HomePage::new(name.to_owned())),
             Page::LoginPage => Box::new(login::LoginPage::new()),
             Page::Details(id) => Box::new(details::DetailsPage::new(*id)),
+        }
+    }
+
+    fn settings(&self) -> Option<HeaderSettings> {
+        match self {
+            Page::LoginPage => Some(HeaderSettings {
+                show_header: false,
+                ..Default::default()
+            }),
+            _ => None,
         }
     }
 }
