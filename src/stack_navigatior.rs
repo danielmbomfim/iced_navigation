@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::Hash, ops::Div};
 
 use iced::{
     widget::{column, container, horizontal_space, Stack},
-    Element, Length,
+    Length,
 };
 
 use crate::{
@@ -187,28 +187,23 @@ where
             horizontal_space().into()
         };
 
-        let history: Vec<Element<Message>> = self
-            .history
-            .iter()
-            .map(|page| {
-                let (header, widget) = self.pages.get(page).unwrap();
+        let previous_page = self.history.last().filter(|_| self.transition).map(|page| {
+            let (header, widget) = self.pages.get(page).unwrap();
 
-                let header = if page.settings().is_none_or(|settings| settings.show_header) {
-                    header.view()
-                } else {
-                    horizontal_space().into()
-                };
+            let header = if page.settings().is_none_or(|settings| settings.show_header) {
+                header.view()
+            } else {
+                horizontal_space().into()
+            };
 
-                stack_page_wrapper(column![header, widget.view()])
-                    .active(false)
-                    .animated(self.transition)
-                    .n_progress(self.anim_value * -0.4)
-                    .into()
-            })
-            .collect();
+            stack_page_wrapper(column![header, widget.view()])
+                .active(false)
+                .animated(self.transition)
+                .n_progress(self.anim_value * -0.4)
+        });
 
         Stack::new()
-            .extend(history)
+            .push_maybe(previous_page)
             .push(overlay(self.anim_value))
             .push(
                 stack_page_wrapper(column![header, page.view()])
