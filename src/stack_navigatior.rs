@@ -1,9 +1,6 @@
-use std::{collections::HashMap, hash::Hash, ops::Div};
+use std::{collections::HashMap, hash::Hash};
 
-use iced::{
-    widget::{column, container, horizontal_space, Stack},
-    Length,
-};
+use iced::widget::{column, horizontal_space, Stack};
 
 use crate::{
     animation::Frame,
@@ -187,7 +184,7 @@ where
             horizontal_space().into()
         };
 
-        let previous_page = self.history.last().filter(|_| self.transition).map(|page| {
+        let previous_page = self.history.last().map(|page| {
             let (header, widget) = self.pages.get(page).unwrap();
 
             let header = if page.settings().is_none_or(|settings| settings.show_header) {
@@ -198,13 +195,13 @@ where
 
             stack_page_wrapper(column![header, widget.view()])
                 .active(false)
+                .hide(!self.transition)
                 .animated(self.transition)
                 .n_progress(self.anim_value * -0.4)
         });
 
         Stack::new()
             .push_maybe(previous_page)
-            .push(overlay(self.anim_value))
             .push(
                 stack_page_wrapper(column![header, page.view()])
                     .active(!self.transition)
@@ -222,24 +219,4 @@ where
 
         page.update(message)
     }
-}
-
-fn overlay<'a, Message>(progress: f32) -> iced::Element<'a, Message>
-where
-    Message: 'a,
-{
-    let opacity = progress.div(100.0) * 0.5;
-
-    container(horizontal_space())
-        .style(move |_theme| {
-            container::background(iced::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: opacity,
-            })
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
 }

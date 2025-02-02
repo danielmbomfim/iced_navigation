@@ -19,6 +19,7 @@ where
     progress: f32,
     active: bool,
     animated: bool,
+    hiden: bool,
 }
 
 impl<'a, Message, Renderer> StackPageWrapper<'a, Message, Renderer>
@@ -30,6 +31,7 @@ where
 
         Self {
             active: true,
+            hiden: false,
             animated: false,
             progress: 0.0,
             content,
@@ -38,6 +40,11 @@ where
 
     pub fn active(mut self, active: bool) -> Self {
         self.active = active;
+        self
+    }
+
+    pub fn hide(mut self, hide: bool) -> Self {
+        self.hiden = hide;
         self
     }
 
@@ -189,6 +196,10 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        if self.hiden {
+            return;
+        }
+
         let bounds = layout.bounds();
         let container_width = bounds.width;
 
