@@ -2,6 +2,8 @@
 
 `iced_navigation` is a navigation library for the [`iced`](https://github.com/iced-rs/iced) GUI framework, designed to provide structured navigation patterns for building interactive applications.
 
+![20250203_150529](https://github.com/user-attachments/assets/212ad19e-e2c1-468e-ab02-715d12cdbb3c)
+
 ## Features
 
 - **Stack Navigator**: Implements a stack-based navigation system.
