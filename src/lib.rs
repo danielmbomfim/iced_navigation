@@ -1,8 +1,7 @@
 use animation::Frame;
-use components::header::{HeaderButtonElement, HeaderSettings, HeaderTitleElement};
-pub use stack_navigatior::StackNavigator;
 
-mod stack_navigatior;
+#[cfg(feature = "stack")]
+pub mod stack_navigatior;
 
 pub mod components {
     pub mod header;
@@ -24,30 +23,6 @@ pub trait Navigator<PageMapper> {
     fn is_on_page_and<F: Fn() -> bool>(&self, page: PageMapper, f: F) -> bool;
 
     fn clear_history(&mut self);
-}
-
-pub trait StackNavigatorMapper {
-    type Message: Clone + NavigationConvertible;
-
-    fn title(&self) -> String;
-
-    fn into_component(&self) -> Box<dyn PageComponent<Self::Message>>;
-
-    fn settings(&self) -> Option<HeaderSettings> {
-        None
-    }
-
-    fn back_button(&self) -> Option<Box<dyn HeaderButtonElement<Self::Message>>> {
-        None
-    }
-
-    fn right_button(&self) -> Option<Box<dyn HeaderButtonElement<Self::Message>>> {
-        None
-    }
-
-    fn title_widget(&self) -> Option<Box<dyn HeaderTitleElement<Self::Message>>> {
-        None
-    }
 }
 
 pub trait NavigationConvertible {

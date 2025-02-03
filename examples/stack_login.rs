@@ -1,7 +1,8 @@
 use iced::{Element, Task};
 use iced_navigation::{
-    components::header::HeaderSettings, NavigationAction, NavigationConvertible, Navigator,
-    PageComponent, StackNavigator, StackNavigatorMapper,
+    components::header::HeaderSettings,
+    stack_navigatior::{StackNavigator, StackNavigatorMapper},
+    NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
 #[derive(Debug, Clone)]

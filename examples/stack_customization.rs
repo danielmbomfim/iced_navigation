@@ -3,7 +3,8 @@ use iced_navigation::{
     components::header::{
         ButtonSettings, HeaderButtonElement, HeaderSettings, HeaderTitleElement, TitleSettings,
     },
-    NavigationAction, NavigationConvertible, PageComponent, StackNavigator, StackNavigatorMapper,
+    stack_navigatior::{StackNavigator, StackNavigatorMapper},
+    NavigationAction, NavigationConvertible, PageComponent,
 };
 
 #[derive(Debug, Clone)]
