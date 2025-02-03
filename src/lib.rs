@@ -1,7 +1,7 @@
 use animation::Frame;
 
 #[cfg(feature = "stack")]
-pub mod stack_navigatior;
+pub mod stack_navigator;
 
 pub mod components {
     pub mod header;

@@ -3,7 +3,7 @@ use iced_navigation::{
     components::header::{
         ButtonSettings, HeaderButtonElement, HeaderSettings, HeaderTitleElement, TitleSettings,
     },
-    stack_navigatior::{StackNavigator, StackNavigatorMapper},
+    stack_navigator::{StackNavigator, StackNavigatorMapper},
     NavigationAction, NavigationConvertible, PageComponent,
 };
 
@@ -204,6 +204,7 @@ impl App {
 
         (Self { nav }, task)
     }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         if let Message::NavigationAction(action) = &message {
             return self.nav.handle_actions(action.clone());
