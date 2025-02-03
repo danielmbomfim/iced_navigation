@@ -1,6 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-use iced::widget::{column, horizontal_space, Stack};
+use iced::{
+    widget::{column, horizontal_space, Stack},
+    Element,
+};
 
 use crate::{
     animation::Frame,
@@ -184,24 +187,29 @@ where
             horizontal_space().into()
         };
 
-        let previous_page = self.history.last().map(|page| {
-            let (header, widget) = self.pages.get(page).unwrap();
+        let previous_pages: Vec<Element<_>> = self
+            .history
+            .iter()
+            .map(|page| {
+                let (header, widget) = self.pages.get(page).unwrap();
 
-            let header = if page.settings().is_none_or(|settings| settings.show_header) {
-                header.view()
-            } else {
-                horizontal_space().into()
-            };
+                let header = if page.settings().is_none_or(|settings| settings.show_header) {
+                    header.view()
+                } else {
+                    horizontal_space().into()
+                };
 
-            stack_page_wrapper(column![header, widget.view()])
-                .active(false)
-                .hide(!self.transition)
-                .animated(self.transition)
-                .n_progress(self.anim_value * -0.4)
-        });
+                stack_page_wrapper(column![header, widget.view()])
+                    .active(false)
+                    .hide(!self.transition)
+                    .animated(self.transition)
+                    .n_progress(self.anim_value * -0.4)
+                    .into()
+            })
+            .collect();
 
         Stack::new()
-            .push_maybe(previous_page)
+            .extend(previous_pages)
             .push(
                 stack_page_wrapper(column![header, page.view()])
                     .active(!self.transition)
