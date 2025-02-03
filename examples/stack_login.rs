@@ -169,7 +169,7 @@ pub mod home {
         fn view(&self) -> Element<Message> {
             scrollable(
                 column![
-                    container(text!("Wellcome {}!", self.name).size(30)).align_x(Alignment::Center),
+                    container(text!("Welcome {}!", self.name).size(30)).align_x(Alignment::Center),
                     text(concat!(
                         "Sed ut perspiciatis unde omnis iste natus error sit voluptatem ",
                         "accusantium doloremque laudantium, totam rem aperiam, eaque ipsa ",
