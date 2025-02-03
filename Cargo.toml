@@ -2,6 +2,14 @@
 name = "iced_navigation"
 version = "1.0.0"
 edition = "2021"
+description = "Navigation library for the iced GUI framework"
+homepage = "https://github.com/danielmbomfim/iced_navigation"
+repository = "https://github.com/danielmbomfim/iced_navigation"
+keywords = ["gui", "iced", "navigation"]
+categories = ["gui"]
+readme = "README.md"
+authors = ["Daniel M. Bomfim"]
+license = "MIT"
 
 [dependencies]
 iced = "0.13.1"
