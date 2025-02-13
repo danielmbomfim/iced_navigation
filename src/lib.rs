@@ -2,10 +2,14 @@ use animation::Frame;
 
 #[cfg(feature = "stack")]
 pub mod stack_navigator;
+#[cfg(feature = "tabs")]
+pub mod tabs_navigator;
 
 pub mod components {
     pub mod header;
     pub(crate) mod stack_page_wrapper;
+    #[cfg(feature = "tabs")]
+    pub mod tabs;
 }
 
 pub(crate) mod animation;

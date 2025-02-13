@@ -16,5 +16,6 @@ iced = "0.13.1"
 iced_font_awesome = "0.2.1"
 
 [features]
+tabs = []
 stack = []
 default = ["stack"]
