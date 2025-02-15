@@ -8,7 +8,6 @@ use std::marker::PhantomData;
 use crate::{tabs_navigator::TabsNavigatorMapper, NavigationAction, NavigationConvertible};
 
 pub struct TabsSettings {
-    pub height: Length,
     pub width: Length,
     pub background_color: Option<Color>,
     pub background_tint_color: Option<Color>,
@@ -17,17 +16,16 @@ pub struct TabsSettings {
 }
 
 pub struct TabItemSetting {
-    icon_size: f32,
-    text_size: f32,
-    color: Option<Color>,
-    tint_color: Option<Color>,
-    horizontal: bool,
+    pub icon_size: f32,
+    pub text_size: f32,
+    pub color: Option<Color>,
+    pub tint_color: Option<Color>,
+    pub horizontal: bool,
 }
 
 impl Default for TabsSettings {
     fn default() -> Self {
         Self {
-            height: Length::from(50),
             width: Length::Fill,
             background_color: None,
             background_tint_color: None,
@@ -134,6 +132,7 @@ where
                                     })
                             }))
                             .padding(5)
+                            .spacing(5)
                             .align_y(Alignment::Center)
                             .into()
                     } else {
@@ -161,6 +160,7 @@ where
                                     })
                             }))
                             .padding(5)
+                            .spacing(2)
                             .align_x(Alignment::Center)
                             .into()
                     };
@@ -187,8 +187,8 @@ where
             .spacing(10);
 
         container(tabs)
+            .padding(2)
             .align_x(self.settings.alignment)
-            .height(self.settings.height)
             .width(self.settings.width)
             .style(|theme| {
                 container::background(
