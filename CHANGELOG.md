@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.0.0...v1.1.0) - 2025-02-23
+
+### Added
+
+- update tabs settings
+- update tabs styling
+- add basic implementation of a tabs navigator
+
+### Fixed
+
+- fix example title
+- *(tabs)* fix default icon colors
+
+### Other
+
+- *(tabs)* fix compilation error in example
+- update README
+- *(tabs)* create a bottom tabs example
+- release v1.0.0
+
 ## [1.0.0](https://github.com/danielmbomfim/iced_navigation/releases/tag/v1.0.0) - 2025-02-03
 
 ### Added
