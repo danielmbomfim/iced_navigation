@@ -1,3 +1,4 @@
+#[cfg(feature = "tabs")]
 mod article_page {
     use iced::{
         widget::{column, text},
@@ -40,6 +41,7 @@ mod article_page {
     }
 }
 
+#[cfg(feature = "tabs")]
 mod list_page {
     use iced::{
         widget::{row, scrollable, text, Column},
@@ -107,6 +109,7 @@ mod list_page {
     }
 }
 
+#[cfg(feature = "tabs")]
 mod settings_page {
     use iced::{
         widget::{column, container, text},
