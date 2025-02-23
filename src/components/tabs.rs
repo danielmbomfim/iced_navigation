@@ -94,12 +94,12 @@ where
                                     self.settings
                                         .item_setting
                                         .color
-                                        .or(Some(pallete.background.base.text))
+                                        .or(Some(pallete.primary.base.text))
                                 } else {
                                     self.settings
                                         .item_setting
                                         .tint_color
-                                        .or(Some(pallete.primary.base.text))
+                                        .or(Some(pallete.primary.base.text.scale_alpha(0.5)))
                                 },
                             }
                         })
@@ -121,12 +121,12 @@ where
                                                 self.settings
                                                     .item_setting
                                                     .color
-                                                    .or(Some(pallete.background.base.text))
+                                                    .or(Some(pallete.primary.strong.color))
                                             } else {
                                                 self.settings
                                                     .item_setting
                                                     .tint_color
-                                                    .or(Some(pallete.primary.base.text))
+                                                    .or(Some(pallete.primary.weak.color))
                                             },
                                         }
                                     })
