@@ -205,6 +205,7 @@ impl App {
         (Self { nav }, task)
     }
 
+    #[allow(irrefutable_let_patterns)]
     fn update(&mut self, message: Message) -> Task<Message> {
         if let Message::NavigationAction(action) = &message {
             return self.nav.handle_actions(action.clone());
@@ -219,5 +220,5 @@ impl App {
 }
 
 fn main() -> iced::Result {
-    iced::application("Stack login example", App::update, App::view).run_with(App::new)
+    iced::application("Stack customization", App::update, App::view).run_with(App::new)
 }
