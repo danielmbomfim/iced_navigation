@@ -1,6 +1,6 @@
 [package]
 name = "iced_navigation"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "Navigation library for the iced GUI framework"
 homepage = "https://github.com/danielmbomfim/iced_navigation"
