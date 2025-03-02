@@ -376,10 +376,8 @@ where
                     }
                 };
 
-            for (i, (((layer, animation_value), state), layout)) in
-                layers.take(self.children.len().min(2))
-            {
-                if self.hidden.contains(&i) {
+            for (i, (((layer, animation_value), state), layout)) in layers {
+                if self.hidden.contains(&i) || i > self.children.len() - 3 {
                     continue;
                 }
 
