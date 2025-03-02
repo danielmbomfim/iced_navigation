@@ -7,7 +7,7 @@ pub mod tabs_navigator;
 
 pub mod components {
     pub mod header;
-    pub(crate) mod stack_page_wrapper;
+    pub(crate) mod pages_container;
     #[cfg(feature = "tabs")]
     pub mod tabs;
 }

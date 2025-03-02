@@ -1,15 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
 
-use iced::{
-    widget::{column, horizontal_space, Stack},
-    Element,
-};
+use iced::widget::{column, horizontal_space};
 
 use crate::{
     animation::Frame,
     components::{
         header::{Header, HeaderButtonElement, HeaderSettings, HeaderTitleElement},
-        stack_page_wrapper::stack_page_wrapper,
+        pages_container::pages_container,
     },
     NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
@@ -214,10 +211,9 @@ where
             horizontal_space().into()
         };
 
-        let previous_pages: Vec<Element<_>> = self
-            .history
+        self.history
             .iter()
-            .map(|page| {
+            .fold(pages_container(), |container, page| {
                 let (header, widget) = self.pages.get(page).unwrap();
 
                 let header = if page.settings().is_none_or(|settings| settings.show_header) {
@@ -226,23 +222,23 @@ where
                     horizontal_space().into()
                 };
 
-                stack_page_wrapper(column![header, widget.view()])
-                    .active(false)
-                    .hide(!self.transition)
-                    .animated(self.transition)
-                    .n_progress(self.anim_value * -0.4)
-                    .into()
+                container
+                    .push(column![header, widget.view()])
+                    .disable_last(true)
+                    .hide_last(!self.transition)
+                    .n_progress_last(if self.transition {
+                        Some(self.anim_value * -0.4)
+                    } else {
+                        None
+                    })
             })
-            .collect();
-
-        Stack::new()
-            .extend(previous_pages)
-            .push(
-                stack_page_wrapper(column![header, page.view()])
-                    .active(!self.transition)
-                    .animated(self.transition)
-                    .progress(self.anim_value),
-            )
+            .push(column![header, page.view()])
+            .disable_last(self.transition)
+            .progress_last(if self.transition {
+                Some(self.anim_value)
+            } else {
+                None
+            })
             .into()
     }
 
