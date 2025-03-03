@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.1.0...v1.2.0) - 2025-03-03
+
+### Added
+
+- *(tabs)* implement state persistence for the pages
+- replaces iced Stack with a custom widget to manage the navigator pages
+
+### Fixed
+
+- fix method used to determine which pages need to be rendered by the PagesContainer
+- fix bug causing navigators with more than 2 pages to not render top page
+
 ## [1.1.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.0.0...v1.1.0) - 2025-02-23
 
 ### Added
