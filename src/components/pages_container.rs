@@ -376,8 +376,10 @@ where
                     }
                 };
 
+            let pages_number = self.children.len();
+
             for (i, (((layer, animation_value), state), layout)) in layers {
-                if self.hidden.contains(&i) || i > self.children.len() - 3 {
+                if self.hidden.contains(&i) || pages_number > 2 && i <= pages_number - 3 {
                     continue;
                 }
 
