@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Div;
 
@@ -17,6 +18,7 @@ pub struct PagesContainer<'a, Message, Renderer = iced::Renderer> {
     hidden: HashSet<usize>,
     animation_progress: Vec<Option<f32>>,
     children: Vec<Element<'a, Message, Theme, Renderer>>,
+    elevated_frame: RefCell<Option<usize>>,
 }
 
 impl<'a, Message, Renderer> PagesContainer<'a, Message, Renderer>
@@ -31,6 +33,7 @@ where
             disabed: HashSet::new(),
             hidden: HashSet::new(),
             animation_progress: Vec::new(),
+            elevated_frame: RefCell::new(None),
         }
     }
 
@@ -117,6 +120,15 @@ where
     ) -> Self {
         children.into_iter().fold(self, Self::push)
     }
+
+    pub fn elevate(self, index: usize) -> Self {
+        {
+            let mut elevated_frame = self.elevated_frame.borrow_mut();
+            *elevated_frame = Some(index);
+        }
+
+        self
+    }
 }
 
 impl<'a, Message, Renderer> Widget<Message, Theme, Renderer>
@@ -129,7 +141,16 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+        let mut elevated_frame = self.elevated_frame.borrow_mut();
+
+        match elevated_frame.take() {
+            Some(value) => {
+                let element = tree.children.remove(value);
+                tree.children.push(element);
+                tree.diff_children(&self.children);
+            }
+            None => tree.diff_children(&self.children),
+        };
     }
 
     fn size(&self) -> Size<Length> {

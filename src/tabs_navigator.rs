@@ -1,12 +1,12 @@
-use iced::{
-    widget::{column, container},
-    Length,
-};
+use iced::widget::column;
 use iced_font_awesome::IconFont;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    components::tabs::{Tabs, TabsSettings},
+    components::{
+        pages_container::pages_container,
+        tabs::{Tabs, TabsSettings},
+    },
     NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
@@ -47,6 +47,7 @@ where
     pages: HashMap<PageMapper, Box<dyn PageComponent<Message>>>,
     history: Vec<PageMapper>,
     tabs: Tabs<Message, PageMapper>,
+    removed_page: Option<usize>,
 }
 
 impl<Message, PageMapper> TabsNavigator<Message, PageMapper>
@@ -64,6 +65,7 @@ where
             current_page: initial_page.clone(),
             pages: HashMap::new(),
             history: Vec::new(),
+            removed_page: None,
         };
 
         let widget = initial_page.into_component();
@@ -100,6 +102,15 @@ where
                 self.tabs.set_settings(settings);
 
                 self.history.push(old_page);
+
+                self.removed_page = self
+                    .history
+                    .iter()
+                    .position(|page| *page == self.current_page);
+
+                if let Some(index) = self.removed_page {
+                    self.history.remove(index);
+                }
 
                 load_task
             }
@@ -139,18 +150,30 @@ where
     PageMapper: TabsNavigatorMapper<Message = Message> + Clone + Eq + Hash,
 {
     fn view(&self) -> iced::Element<Message> {
-        let page = container(
-            self.pages
-                .get(&self.current_page)
-                .expect("page should have been initialized")
-                .view(),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let page = self
+            .pages
+            .get(&self.current_page)
+            .expect("page should have been initialized");
+
+        let mut container = self
+            .history
+            .iter()
+            .fold(pages_container(), |container, page| {
+                let widget = self.pages.get(page).unwrap();
+
+                container.push(widget.view()).disable_last(true)
+            })
+            .push(page.view())
+            .disable_last(false);
+
+        container = match self.removed_page {
+            Some(index) => container.elevate(index),
+            None => container,
+        };
 
         match self.position {
-            Position::Top => column![self.tabs.view(), page].into(),
-            Position::Bottom => column![page, self.tabs.view()].into(),
+            Position::Top => column![self.tabs.view(), container].into(),
+            Position::Bottom => column![container, self.tabs.view()].into(),
         }
     }
 
