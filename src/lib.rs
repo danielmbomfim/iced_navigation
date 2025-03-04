@@ -1,5 +1,8 @@
 use animation::Frame;
 
+#[cfg(feature = "derive")]
+pub use iced_navigation_derive::{navigator_message, NavigationConvertible};
+
 #[cfg(feature = "stack")]
 pub mod stack_navigator;
 #[cfg(feature = "tabs")]
