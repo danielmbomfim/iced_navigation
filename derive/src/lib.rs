@@ -113,7 +113,7 @@ struct PageAttributes {
 }
 
 impl PageAttributes {
-    fn parse(enum_name: &Ident, value: &Variant) -> Result<Self, syn::Error> {
+    fn parse(value: &Variant) -> Result<Self, syn::Error> {
         let Some(attr) = value.attrs.iter().find(|attr| attr.path.is_ident("page")) else {
             return Err(syn::Error::new_spanned(
                 enum_name,
@@ -144,17 +144,40 @@ impl PageAttributes {
                     }
                 } else if name_value.path.is_ident("settings") {
                     if let Lit::Str(lit_str) = &name_value.lit {
-                        settings = Some(lit_str.parse().expect("Expected a valid function path"));
+                        settings = match lit_str.parse() {
+                          Ok(value) => Some(value),
+                          Err(_) => {
+                              return Err(syn::Error::new_spanned(
+                                  name_value,
+                                  "settings must be a function, for example, #[page(settings = my_function)]",
+                              ))
+                          }
+                      };
                     }
                 }
             }
         }
 
         Ok(Self {
-            title: title.expect("a title is expected for each page").to_owned(),
-            component: component
-                .expect("a component is expected for each page")
-                .to_owned(),
+            title: match title {
+                Some(value) => value.to_owned(),
+                None => {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        r#"Expected #[page(title = "your page title")]"#,
+                    ))
+                }
+            },
+            component: match component {
+                Some(value) => value.to_owned(),
+                None => {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        r#"Expected #[page(component = "your page component")]"#,
+                    ))
+                }
+            },
+
             settings,
         })
     }
@@ -201,7 +224,7 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
     let mut variant_attrs: Vec<PageAttributes> = Vec::with_capacity(enum_data.variants.len());
 
     for variant in enum_data.variants.iter() {
-        match PageAttributes::parse(enum_name, variant) {
+        match PageAttributes::parse(variant) {
             Ok(value) => variant_attrs.push(value),
             Err(err) => return err.to_compile_error().into(),
         };
