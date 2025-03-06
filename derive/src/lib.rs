@@ -43,6 +43,17 @@ pub fn derive_navigation_mapper(item: TokenStream) -> TokenStream {
                                     break;
                                 }
                             }
+                        } else if path.path.segments.len() == 2
+                            && path.path.segments[1].ident == "NavigationAction"
+                        {
+                            if let syn::PathArguments::AngleBracketed(ref args) =
+                                path.path.segments[1].arguments
+                            {
+                                if let Some(GenericArgument::Type(ty)) = args.args.first() {
+                                    page_type = Some(ty.clone());
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -66,7 +77,7 @@ pub fn derive_navigation_mapper(item: TokenStream) -> TokenStream {
         impl #trait_name for #enum_name {
             type PageMapper = #page_type;
 
-            fn from_action(action: NavigationAction<Self::PageMapper>) -> Self {
+            fn from_action(action: iced_navigation::NavigationAction<Self::PageMapper>) -> Self {
                 #enum_name::NavigationAction(action)
             }
         }
@@ -93,7 +104,7 @@ pub fn navigator_message(attr: TokenStream, item: TokenStream) -> TokenStream {
                 ident: None,
                 colon_token: None,
                 attrs: vec![],
-                ty: Type::Verbatim(quote! { NavigationAction<#page_mapper> }),
+                ty: Type::Verbatim(quote! { iced_navigation::NavigationAction<#page_mapper> }),
             }]),
         }),
         discriminant: None,
@@ -116,15 +127,15 @@ impl PageAttributes {
     fn parse(value: &Variant) -> Result<Self, syn::Error> {
         let Some(attr) = value.attrs.iter().find(|attr| attr.path.is_ident("page")) else {
             return Err(syn::Error::new_spanned(
-                enum_name,
-                "page attribute must be defined in each variant of the enum",
+                value,
+                "Each variant of the enum must have #[page(...)] declared.",
             ));
         };
 
         let Ok(Meta::List(meta_list)) = attr.parse_meta() else {
             return Err(syn::Error::new_spanned(
-                enum_name,
-                "page attribute must be defined in each variant of the enum",
+                value,
+                "Each variant of the enum must have #[page(...)] declared.",
             ));
         };
 
@@ -140,7 +151,15 @@ impl PageAttributes {
                     }
                 } else if name_value.path.is_ident("component") {
                     if let Lit::Str(lit_str) = &name_value.lit {
-                        component = Some(lit_str.parse().expect("Expected a valid function path"));
+                        component = match lit_str.parse() {
+                            Ok(value) => Some(value),
+                            Err(_) => {
+                                return Err(syn::Error::new_spanned(
+                                    name_value,
+                                    "component must be a function, for example, #[page(component = my_function)]",
+                                ))
+                            }
+                        };
                     }
                 } else if name_value.path.is_ident("settings") {
                     if let Lit::Str(lit_str) = &name_value.lit {
@@ -334,13 +353,13 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
             }.to_owned()
           }
 
-          fn into_component(&self) -> Box<dyn PageComponent<Self::Message>> {
+          fn into_component(&self) -> Box<dyn iced_navigation::PageComponent<Self::Message>> {
             match self {
               #(#component_match),*
             }
           }
 
-          fn settings(&self) -> Option<HeaderSettings> {
+          fn settings(&self) -> Option<iced_navigation::components::header::HeaderSettings> {
             match self {
               #(#settings_match),*
             }
