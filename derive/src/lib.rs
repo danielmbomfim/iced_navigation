@@ -121,6 +121,9 @@ struct PageAttributes {
     title: LitStr,
     component: Path,
     settings: Option<Path>,
+    title_component: Option<Path>,
+    back_button: Option<Path>,
+    right_button: Option<Path>,
 }
 
 impl PageAttributes {
@@ -142,6 +145,9 @@ impl PageAttributes {
         let mut title = None;
         let mut component: Option<Path> = None;
         let mut settings: Option<Path> = None;
+        let mut title_component: Option<Path> = None;
+        let mut back_button: Option<Path> = None;
+        let mut right_button: Option<Path> = None;
 
         for nested_meta in meta_list.nested.iter() {
             if let NestedMeta::Meta(Meta::NameValue(name_value)) = nested_meta {
@@ -164,14 +170,58 @@ impl PageAttributes {
                 } else if name_value.path.is_ident("settings") {
                     if let Lit::Str(lit_str) = &name_value.lit {
                         settings = match lit_str.parse() {
-                          Ok(value) => Some(value),
-                          Err(_) => {
-                              return Err(syn::Error::new_spanned(
-                                  name_value,
-                                  "settings must be a function, for example, #[page(settings = my_function)]",
-                              ))
-                          }
-                      };
+                            Ok(value) => Some(value),
+                            Err(_) => {
+                                return Err(
+                                  syn::Error::new_spanned(
+                                    name_value,
+                                    "settings must be a function, for example, #[page(settings = my_function)]",
+                                  )
+                                );
+                            }
+                        };
+                    }
+                } else if name_value.path.is_ident("title_component") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        title_component = match lit_str.parse() {
+                            Ok(value) => Some(value),
+                            Err(_) => {
+                                return Err(
+                                  syn::Error::new_spanned(
+                                    name_value,
+                                    "title_component must be a function, for example, #[page(title_component = my_function)]"
+                                  )
+                                );
+                            }
+                        };
+                    }
+                } else if name_value.path.is_ident("back_button") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        back_button = match lit_str.parse() {
+                            Ok(value) => Some(value),
+                            Err(_) => {
+                                return Err(
+                                  syn::Error::new_spanned(
+                                    name_value,
+                                    "back_button must be a function, for example, #[page(back_button = my_function)]",
+                                  )
+                                );
+                            }
+                        };
+                    }
+                } else if name_value.path.is_ident("right_button") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        right_button = match lit_str.parse() {
+                            Ok(value) => Some(value),
+                            Err(_) => {
+                                return Err(
+                                  syn::Error::new_spanned(
+                                    name_value,
+                                    "right_button must be a function, for example, #[page(right_button = my_function)]",
+                                  )
+                                );
+                            }
+                        };
                     }
                 }
             }
@@ -196,9 +246,48 @@ impl PageAttributes {
                     ))
                 }
             },
-
             settings,
+            title_component,
+            back_button,
+            right_button,
         })
+    }
+}
+
+fn func_to_match(variant: &Variant, function_path: &Option<Path>) -> proc_macro2::TokenStream {
+    let variant_name = &variant.ident;
+
+    match &variant.fields {
+        Fields::Unit => match function_path {
+            Some(value) => quote! { Self::#variant_name => Some(#value()) },
+            None => quote! { Self::#variant_name => None },
+        },
+        Fields::Unnamed(fields) => {
+            let params: Vec<_> = (0..fields.unnamed.len())
+                .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
+                .collect();
+
+            match function_path {
+                Some(value) => {
+                    quote! { Self::#variant_name(#(#params),*) => Some(#value(#(#params),*)) }
+                }
+                None => quote! { Self::#variant_name(..) => None },
+            }
+        }
+        Fields::Named(fields) => {
+            let params: Vec<_> = fields
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap())
+                .collect();
+
+            match function_path {
+                Some(value) => {
+                    quote! { Self::#variant_name{ #(#params),* } => Some(#value(#(#params),*)) }
+                }
+                None => quote! { Self::#variant_name{ .. } => None },
+            }
+        }
     }
 }
 
@@ -303,45 +392,49 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
                 }
             });
 
-    let settings_match = enum_data.variants.iter().zip(variant_attrs.iter()).map(
-        |(variant, result)| {
-            let variant_name = &variant.ident;
-            let settings = &result.settings;
+    let settings_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let settings = &result.settings;
 
-            match &variant.fields {
-                Fields::Unit => match settings {
-                    Some(value) => quote! { Self::#variant_name => #value() },
-                    None => quote! { Self::#variant_name => None },
-                },
-                Fields::Unnamed(fields) => {
-                    let params: Vec<_> = (0..fields.unnamed.len())
-                        .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
-                        .collect();
+                func_to_match(&variant, settings)
+            });
 
-                    match settings {
-                        Some(value) => {
-                            quote! { Self::#variant_name(#(#params),*) => #value(#(#params),*) }
-                        }
-                        None => quote! { Self::#variant_name(..) => None },
-                    }
-                }
-                Fields::Named(fields) => {
-                    let params: Vec<_> = fields
-                        .named
-                        .iter()
-                        .map(|f| f.ident.as_ref().unwrap())
-                        .collect();
+    let title_component_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let title_component = &result.title_component;
 
-                    match settings {
-                        Some(value) => {
-                            quote! { Self::#variant_name{ #(#params),* } => #value(#(#params),*) }
-                        }
-                        None => quote! { Self::#variant_name{ .. } => None },
-                    }
-                }
-            }
-        },
-    );
+                func_to_match(&variant, title_component)
+            });
+
+    let back_button_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let back_button = &result.back_button;
+
+                func_to_match(&variant, back_button)
+            });
+
+    let right_button_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let right_button = &result.right_button;
+
+                func_to_match(&variant, right_button)
+            });
 
     let expanded = quote! {
         impl #trait_name for #enum_name {
@@ -362,6 +455,24 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
           fn settings(&self) -> Option<iced_navigation::components::header::HeaderSettings> {
             match self {
               #(#settings_match),*
+            }
+          }
+
+          fn back_button(&self) -> Option<Box<dyn iced_navigation::components::header::HeaderButtonElement<Self::Message>>> {
+            match self {
+              #(#back_button_match),*
+            }
+          }
+
+          fn right_button(&self) -> Option<Box<dyn iced_navigation::components::header::HeaderButtonElement<Self::Message>>> {
+            match self {
+              #(#right_button_match),*
+            }
+          }
+
+          fn title_widget(&self) -> Option<Box<dyn iced_navigation::components::header::HeaderTitleElement<Self::Message>>> {
+            match self {
+              #(#title_component_match),*
             }
           }
         }

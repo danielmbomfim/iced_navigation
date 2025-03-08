@@ -40,11 +40,11 @@ pub mod login {
 
     use crate::{Message, Page};
 
-    pub fn page_setting() -> Option<HeaderSettings> {
-        Some(HeaderSettings {
+    pub fn page_setting() -> HeaderSettings {
+        HeaderSettings {
             show_header: false,
             ..Default::default()
-        })
+        }
     }
 
     pub struct LoginPage {
