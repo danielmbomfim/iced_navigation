@@ -17,6 +17,39 @@ macro_rules! extract_path {
     };
 }
 
+macro_rules! maybe_path {
+    ($variant:expr, $function_path:expr, $params:expr) => {{
+        let params = $params;
+        let variant_name = $variant;
+
+        match $function_path {
+            Some(value) => {
+                quote! { Self::#variant_name(#(#params),*) => Some(#value(#(#params),*)) }
+            }
+            None => quote! { Self::#variant_name(..) => None },
+        }
+    }};
+    ($variant:expr, $function_path:expr, $params:expr, $_:expr) => {{
+        let params = $params;
+        let variant_name = $variant;
+
+        match $function_path {
+            Some(value) => {
+                quote! { Self::#variant_name { #(#params),* } => Some(#value(#(#params),*)) }
+            }
+            None => quote! { Self::#variant_name { .. } => None },
+        }
+    }};
+    ($variant:expr, $function_path:expr) => {{
+        let variant_name = $variant;
+
+        match $function_path {
+            Some(value) => quote! { Self::#variant_name => Some(#value()) },
+            None => quote! { Self::#variant_name => None },
+        }
+    }};
+}
+
 #[proc_macro_derive(NavigationConvertible)]
 pub fn derive_navigation_mapper(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
@@ -211,43 +244,6 @@ impl StackPageAttributes {
     }
 }
 
-fn func_to_match(variant: &Variant, function_path: &Option<Path>) -> proc_macro2::TokenStream {
-    let variant_name = &variant.ident;
-
-    match &variant.fields {
-        Fields::Unit => match function_path {
-            Some(value) => quote! { Self::#variant_name => Some(#value()) },
-            None => quote! { Self::#variant_name => None },
-        },
-        Fields::Unnamed(fields) => {
-            let params: Vec<_> = (0..fields.unnamed.len())
-                .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
-                .collect();
-
-            match function_path {
-                Some(value) => {
-                    quote! { Self::#variant_name(#(#params),*) => Some(#value(#(#params),*)) }
-                }
-                None => quote! { Self::#variant_name(..) => None },
-            }
-        }
-        Fields::Named(fields) => {
-            let params: Vec<_> = fields
-                .named
-                .iter()
-                .map(|f| f.ident.as_ref().unwrap())
-                .collect();
-
-            match function_path {
-                Some(value) => {
-                    quote! { Self::#variant_name{ #(#params),* } => Some(#value(#(#params),*)) }
-                }
-                None => quote! { Self::#variant_name{ .. } => None },
-            }
-        }
-    }
-}
-
 #[proc_macro_derive(StackNavigatorMapper, attributes(message, page))]
 pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
@@ -295,103 +291,68 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
         };
     }
 
-    let title_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let variant_name = &variant.ident;
-                let title = &result.title;
+    let mut title_match = Vec::with_capacity(enum_data.variants.len());
+    let mut component_match = Vec::with_capacity(enum_data.variants.len());
+    let mut settings_match = Vec::with_capacity(enum_data.variants.len());
+    let mut title_component_match = Vec::with_capacity(enum_data.variants.len());
+    let mut back_button_match = Vec::with_capacity(enum_data.variants.len());
+    let mut right_button_match = Vec::with_capacity(enum_data.variants.len());
 
-                match &variant.fields {
-                    Fields::Unit => {
-                        quote! { Self::#variant_name => #title }
-                    }
-                    Fields::Unnamed(_) => {
-                        quote! { Self::#variant_name(..) => #title }
-                    }
-                    Fields::Named(_) => {
-                        quote! { Self::#variant_name { .. } => #title }
-                    }
+    enum_data
+        .variants
+        .iter()
+        .zip(variant_attrs.iter())
+        .for_each(|(variant, result)| {
+            let variant_name = &variant.ident;
+
+            let title = &result.title;
+            let component = &result.component;
+            let settings = result.settings.as_ref();
+            let title_component = result.title_component.as_ref();
+            let back_button = result.back_button.as_ref();
+            let right_button = result.right_button.as_ref();
+
+            match &variant.fields {
+                Fields::Unit => {
+                  title_match.push(quote! { Self::#variant_name => #title });
+                  component_match.push(quote! { Self::#variant_name => Box::new(#component()) });
+
+                  settings_match.push(maybe_path![variant_name, settings]);
+                  title_component_match.push(maybe_path![variant_name, title_component]);
+                  back_button_match.push(maybe_path![variant_name, back_button]);
+                  right_button_match.push(maybe_path![variant_name, right_button]);
+                },
+                Fields::Unnamed(fields) => {
+                  let params: Vec<_> = (0..fields.unnamed.len())
+                      .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
+                      .collect();
+
+                  title_match.push(quote! { Self::#variant_name(..) => #title });
+                  component_match.push(quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) });
+
+
+                  settings_match.push(maybe_path![variant_name, settings, &params]);
+                  title_component_match.push(maybe_path![variant_name, title_component, &params]);
+                  back_button_match.push(maybe_path![variant_name, back_button, &params]);
+                  right_button_match.push(maybe_path![variant_name, right_button, &params]);
                 }
-            });
+                Fields::Named(fields) => {
+                  let params: Vec<_> = fields
+                      .named
+                      .iter()
+                      .map(|f| f.ident.as_ref().unwrap())
+                      .collect();
 
-    let component_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let variant_name = &variant.ident;
-                let component = &result.component;
+                  title_match.push(quote! { Self::#variant_name { .. } => #title });
+                  component_match.push(quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) });
 
-                match &variant.fields {
-                    Fields::Unit => {
-                        quote! { Self::#variant_name => Box::new(#component()) }
-                    }
-                    Fields::Unnamed(fields) => {
-                        let params: Vec<_> = (0..fields.unnamed.len())
-                            .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
-                            .collect();
-
-                        quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) }
-                    }
-                    Fields::Named(fields) => {
-                        let params: Vec<_> = fields
-                            .named
-                            .iter()
-                            .map(|f| f.ident.as_ref().unwrap())
-                            .collect();
-
-                        quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) }
-                    }
+                  settings_match.push(maybe_path![variant_name, settings, &params, 0]);
+                  title_component_match.push(maybe_path![variant_name, title_component, &params, 0]);
+                  back_button_match.push(maybe_path![variant_name, back_button, &params, 0]);
+                  right_button_match.push(maybe_path![variant_name, right_button, &params, 0]);
                 }
-            });
-
-    let settings_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let settings = &result.settings;
-
-                func_to_match(&variant, settings)
-            });
-
-    let title_component_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let title_component = &result.title_component;
-
-                func_to_match(&variant, title_component)
-            });
-
-    let back_button_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let back_button = &result.back_button;
-
-                func_to_match(&variant, back_button)
-            });
-
-    let right_button_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let right_button = &result.right_button;
-
-                func_to_match(&variant, right_button)
-            });
+            };
+        });
 
     let expanded = quote! {
         impl #trait_name for #enum_name {
@@ -576,113 +537,70 @@ pub fn derive_tabs_navigator_mapper(item: TokenStream) -> TokenStream {
         };
     }
 
-    let title_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let variant_name = &variant.ident;
-                let title = &result.title;
+    let mut title_match = Vec::with_capacity(enum_data.variants.len());
+    let mut component_match = Vec::with_capacity(enum_data.variants.len());
+    let mut fa_icon_match = Vec::with_capacity(enum_data.variants.len());
+    let mut icon_component_match = Vec::with_capacity(enum_data.variants.len());
+    let mut settings_match = Vec::with_capacity(enum_data.variants.len());
 
-                match &variant.fields {
-                    Fields::Unit => match title {
-                        Some(value) => quote! { Self::#variant_name => Some(#value.to_owned()) },
-                        None => quote! { Self::#variant_name => None },
-                    },
-                    Fields::Unnamed(_) => match title {
-                        Some(value) => {
-                            quote! { Self::#variant_name(..) => Some(#value.to_owned()) }
-                        }
-                        None => quote! { Self::#variant_name(..) => None },
-                    },
-                    Fields::Named(_) => match title {
-                        Some(value) => {
-                            quote! { Self::#variant_name { .. } => Some(#value.to_owned()) }
-                        }
-                        None => quote! { Self::#variant_name { .. } => None },
-                    },
+    enum_data
+        .variants
+        .iter()
+        .zip(variant_attrs.iter())
+        .for_each(|(variant, result)| {
+            let variant_name = &variant.ident;
+
+            let title = match &result.title {
+              Some(value) => quote! { Some(#value.to_owned()) },
+              None => quote! { None },
+            };
+
+            let fa_icon = match result.fa_icon.as_ref().zip(result.fa_icon_font.as_ref()) {
+              Some((name, font)) => quote! { Some((#name, #font)) },
+              None => quote! { Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
+            };
+
+            let component = &result.component;
+            let icon_component = &result.icon;
+            let settings = &result.settings;
+
+            match &variant.fields {
+                Fields::Unit => {
+                  title_match.push(quote! { Self::#variant_name => #title });
+                  component_match.push(quote! { Self::#variant_name => Box::new(#component()) });
+                  fa_icon_match.push(quote! { Self::#variant_name => #fa_icon });
+
+                  settings_match.push(maybe_path![variant_name, settings]);
+                  icon_component_match.push(maybe_path![variant_name, icon_component]);
+                },
+                Fields::Unnamed(fields) => {
+                  let params: Vec<_> = (0..fields.unnamed.len())
+                      .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
+                      .collect();
+
+                  title_match.push(quote! { Self::#variant_name(..) => #title });
+                  component_match.push(quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) });
+                  fa_icon_match.push(quote! { Self::#variant_name => #fa_icon });
+
+                  settings_match.push(maybe_path![variant_name, settings, &params]);
+                  icon_component_match.push(maybe_path![variant_name, icon_component, &params]);
                 }
-            });
+                Fields::Named(fields) => {
+                  let params: Vec<_> = fields
+                      .named
+                      .iter()
+                      .map(|f| f.ident.as_ref().unwrap())
+                      .collect();
 
-    let component_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let variant_name = &variant.ident;
-                let component = &result.component;
+                  title_match.push(quote! { Self::#variant_name { .. } => #title });
+                  component_match.push(quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) });
+                  fa_icon_match.push(quote! { Self::#variant_name => #fa_icon });
 
-                match &variant.fields {
-                    Fields::Unit => {
-                        quote! { Self::#variant_name => Box::new(#component()) }
-                    }
-                    Fields::Unnamed(fields) => {
-                        let params: Vec<_> = (0..fields.unnamed.len())
-                            .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
-                            .collect();
-
-                        quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) }
-                    }
-                    Fields::Named(fields) => {
-                        let params: Vec<_> = fields
-                            .named
-                            .iter()
-                            .map(|f| f.ident.as_ref().unwrap())
-                            .collect();
-
-                        quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) }
-                    }
+                  settings_match.push(maybe_path![variant_name, settings, &params, 0]);
+                  icon_component_match.push(maybe_path![variant_name, icon_component, &params, 0]);
                 }
-            });
-
-    let fa_icon_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let variant_name = &variant.ident;
-                let fa_icon = result.fa_icon.as_ref().zip(result.fa_icon_font.as_ref());
-
-                match &variant.fields {
-                    Fields::Unit => match fa_icon {
-                        Some((name, font)) => quote! { Self::#variant_name => Some((#name, #font)) },
-                        None => quote! { Self::#variant_name => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
-                    },
-                    Fields::Unnamed(_) => match fa_icon {
-                        Some((name, font)) => quote! { Self::#variant_name(..) => Some((#name, #font)) },
-                        None => quote! { Self::#variant_name(..) => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
-                    },
-                    Fields::Named(_) => match fa_icon {
-                        Some((name, font)) => quote! { Self::#variant_name { .. } => Some((#name, #font)) },
-                        None => quote! { Self::#variant_name { .. } => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
-                    },
-                }
-            });
-
-    let icon_component_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let icon = &result.icon;
-
-                func_to_match(&variant, icon)
-            });
-
-    let settings_match =
-        enum_data
-            .variants
-            .iter()
-            .zip(variant_attrs.iter())
-            .map(|(variant, result)| {
-                let settings = &result.settings;
-
-                func_to_match(&variant, settings)
-            });
+            };
+        });
 
     let expanded = quote! {
         impl #trait_name for #enum_name {
