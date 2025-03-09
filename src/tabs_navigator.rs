@@ -2,6 +2,9 @@ use iced::widget::column;
 use iced_font_awesome::IconFont;
 use std::{collections::HashMap, hash::Hash};
 
+#[cfg(feature = "derive")]
+pub use iced_navigation_derive::TabsNavigatorMapper;
+
 use crate::{
     components::{
         pages_container::pages_container,

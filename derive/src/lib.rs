@@ -6,6 +6,17 @@ use syn::{
     Visibility,
 };
 
+macro_rules! extract_path {
+    ($name:ident, $name_value:expr, $err_message:literal) => {
+        if let Lit::Str(lit_str) = &$name_value.lit {
+            $name = match lit_str.parse() {
+                Ok(value) => Some(value),
+                Err(_) => return Err(syn::Error::new_spanned($name_value, $err_message)),
+            };
+        }
+    };
+}
+
 #[proc_macro_derive(NavigationConvertible)]
 pub fn derive_navigation_mapper(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
@@ -117,7 +128,7 @@ pub fn navigator_message(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-struct PageAttributes {
+struct StackPageAttributes {
     title: LitStr,
     component: Path,
     settings: Option<Path>,
@@ -126,7 +137,7 @@ struct PageAttributes {
     right_button: Option<Path>,
 }
 
-impl PageAttributes {
+impl StackPageAttributes {
     fn parse(value: &Variant) -> Result<Self, syn::Error> {
         let Some(attr) = value.attrs.iter().find(|attr| attr.path.is_ident("page")) else {
             return Err(syn::Error::new_spanned(
@@ -138,7 +149,7 @@ impl PageAttributes {
         let Ok(Meta::List(meta_list)) = attr.parse_meta() else {
             return Err(syn::Error::new_spanned(
                 value,
-                "Each variant of the enum must have #[page(...)] declared.",
+                "Failed to parse page attribute",
             ));
         };
 
@@ -156,73 +167,19 @@ impl PageAttributes {
                         title = Some(lit_str);
                     }
                 } else if name_value.path.is_ident("component") {
-                    if let Lit::Str(lit_str) = &name_value.lit {
-                        component = match lit_str.parse() {
-                            Ok(value) => Some(value),
-                            Err(_) => {
-                                return Err(syn::Error::new_spanned(
-                                    name_value,
-                                    "component must be a function, for example, #[page(component = my_function)]",
-                                ))
-                            }
-                        };
-                    }
+                    extract_path![component, name_value, "component must be a function, for example, #[page(component = my_function)]"];
                 } else if name_value.path.is_ident("settings") {
-                    if let Lit::Str(lit_str) = &name_value.lit {
-                        settings = match lit_str.parse() {
-                            Ok(value) => Some(value),
-                            Err(_) => {
-                                return Err(
-                                  syn::Error::new_spanned(
-                                    name_value,
-                                    "settings must be a function, for example, #[page(settings = my_function)]",
-                                  )
-                                );
-                            }
-                        };
-                    }
+                    extract_path![
+                        settings,
+                        name_value,
+                        "settings must be a function, for example, #[page(settings = my_function)]"
+                    ];
                 } else if name_value.path.is_ident("title_component") {
-                    if let Lit::Str(lit_str) = &name_value.lit {
-                        title_component = match lit_str.parse() {
-                            Ok(value) => Some(value),
-                            Err(_) => {
-                                return Err(
-                                  syn::Error::new_spanned(
-                                    name_value,
-                                    "title_component must be a function, for example, #[page(title_component = my_function)]"
-                                  )
-                                );
-                            }
-                        };
-                    }
+                    extract_path![title_component, name_value, "title_component must be a function, for example, #[page(title_component = my_function)]"];
                 } else if name_value.path.is_ident("back_button") {
-                    if let Lit::Str(lit_str) = &name_value.lit {
-                        back_button = match lit_str.parse() {
-                            Ok(value) => Some(value),
-                            Err(_) => {
-                                return Err(
-                                  syn::Error::new_spanned(
-                                    name_value,
-                                    "back_button must be a function, for example, #[page(back_button = my_function)]",
-                                  )
-                                );
-                            }
-                        };
-                    }
+                    extract_path![back_button, name_value, "back_button must be a function, for example, #[page(back_button = my_function)]"];
                 } else if name_value.path.is_ident("right_button") {
-                    if let Lit::Str(lit_str) = &name_value.lit {
-                        right_button = match lit_str.parse() {
-                            Ok(value) => Some(value),
-                            Err(_) => {
-                                return Err(
-                                  syn::Error::new_spanned(
-                                    name_value,
-                                    "right_button must be a function, for example, #[page(right_button = my_function)]",
-                                  )
-                                );
-                            }
-                        };
-                    }
+                    extract_path![right_button, name_value, "right_button must be a function, for example, #[page(right_button = my_function)]"];
                 }
             }
         }
@@ -329,10 +286,10 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
         };
 
     let trait_name = Ident::new("StackNavigatorMapper", enum_name.span());
-    let mut variant_attrs: Vec<PageAttributes> = Vec::with_capacity(enum_data.variants.len());
+    let mut variant_attrs: Vec<StackPageAttributes> = Vec::with_capacity(enum_data.variants.len());
 
     for variant in enum_data.variants.iter() {
-        match PageAttributes::parse(variant) {
+        match StackPageAttributes::parse(variant) {
             Ok(value) => variant_attrs.push(value),
             Err(err) => return err.to_compile_error().into(),
         };
@@ -473,6 +430,291 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
           fn title_widget(&self) -> Option<Box<dyn iced_navigation::components::header::HeaderTitleElement<Self::Message>>> {
             match self {
               #(#title_component_match),*
+            }
+          }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+struct TabPageAttributes {
+    title: Option<LitStr>,
+    component: Path,
+    settings: Option<Path>,
+    icon: Option<Path>,
+    fa_icon: Option<LitStr>,
+    fa_icon_font: Option<proc_macro2::TokenStream>,
+}
+
+impl TabPageAttributes {
+    fn parse(value: &Variant) -> Result<Self, syn::Error> {
+        let Some(attr) = value.attrs.iter().find(|attr| attr.path.is_ident("page")) else {
+            return Err(syn::Error::new_spanned(
+                value,
+                "Each variant of the enum must have #[page(...)] declared.",
+            ));
+        };
+
+        let Ok(Meta::List(meta_list)) = attr.parse_meta() else {
+            return Err(syn::Error::new_spanned(
+                value,
+                "Failed to parse page attribute",
+            ));
+        };
+
+        let mut title = None;
+        let mut component: Option<Path> = None;
+        let mut settings: Option<Path> = None;
+        let mut icon: Option<Path> = None;
+        let mut fa_icon = None;
+        let mut fa_icon_font: Option<proc_macro2::TokenStream> = None;
+
+        for nested_meta in meta_list.nested.iter() {
+            if let NestedMeta::Meta(Meta::NameValue(name_value)) = nested_meta {
+                if name_value.path.is_ident("title") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        title = Some(lit_str);
+                    }
+                } else if name_value.path.is_ident("component") {
+                    extract_path![component, name_value, "component must be a function, for example, #[page(component = my_function)]"];
+                } else if name_value.path.is_ident("settings") {
+                    extract_path![
+                        settings,
+                        name_value,
+                        "settings must be a function, for example, #[page(settings = my_function)]"
+                    ];
+                } else if name_value.path.is_ident("icon") {
+                    extract_path![
+                        icon,
+                        name_value,
+                        "icon must be a function, for example, #[page(icon = my_function)]"
+                    ];
+                } else if name_value.path.is_ident("fa_icon") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        fa_icon = Some(lit_str);
+                    }
+                } else if name_value.path.is_ident("fa_icon_font") {
+                    if let Lit::Str(lit_str) = &name_value.lit {
+                        fa_icon_font = Some(match lit_str.value().as_str() {
+                            "regular" => quote! { iced_font_awesome::IconFont::Regular },
+                            "solid" => quote! { iced_font_awesome::IconFont::Solid },
+                            "brands" => quote! { iced_font_awesome::IconFont::Brands },
+                            _ => return Err(syn::Error::new_spanned(
+                                name_value,
+                                "Invalid value. Supported options are \"regular\", \"solid\" and \"brands\".",
+                            ))
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            title: title.map(|title| title.to_owned()),
+            component: match component {
+                Some(value) => value.to_owned(),
+                None => {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        r#"Expected #[page(component = "your page component")]"#,
+                    ))
+                }
+            },
+            settings,
+            icon,
+            fa_icon: fa_icon.map(|name| name.to_owned()),
+            fa_icon_font: fa_icon_font.map(|name| name.to_owned()),
+        })
+    }
+}
+
+#[proc_macro_derive(TabsNavigatorMapper, attributes(message, page))]
+pub fn derive_tabs_navigator_mapper(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let enum_name = &input.ident;
+
+    let Data::Enum(enum_data) = input.data else {
+        return syn::Error::new_spanned(
+            enum_name,
+            "TabsNavigatorMapper can only be derived for enums",
+        )
+        .to_compile_error()
+        .into();
+    };
+
+    let mut message_type: Option<Path> = None;
+
+    for attr in &input.attrs {
+        if attr.path.is_ident("message") {
+            if let Ok(Meta::List(meta_list)) = attr.parse_meta() {
+                if let Some(NestedMeta::Meta(Meta::Path(path))) = meta_list.nested.first() {
+                    message_type = Some(path.clone());
+                }
+            }
+        }
+    }
+
+    let message_type =
+        match message_type {
+            Some(name) => name,
+            None => return syn::Error::new_spanned(
+                enum_name,
+                "TabsNavigatorMapper must specify #[message(Message)] attribute, where \"Message\" is your message enum.",
+            )
+            .into_compile_error()
+            .into(),
+        };
+
+    let trait_name = Ident::new("TabsNavigatorMapper", enum_name.span());
+    let mut variant_attrs: Vec<TabPageAttributes> = Vec::with_capacity(enum_data.variants.len());
+
+    for variant in enum_data.variants.iter() {
+        match TabPageAttributes::parse(variant) {
+            Ok(value) => variant_attrs.push(value),
+            Err(err) => return err.to_compile_error().into(),
+        };
+    }
+
+    let title_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let variant_name = &variant.ident;
+                let title = &result.title;
+
+                match &variant.fields {
+                    Fields::Unit => match title {
+                        Some(value) => quote! { Self::#variant_name => Some(#value.to_owned()) },
+                        None => quote! { Self::#variant_name => None },
+                    },
+                    Fields::Unnamed(_) => match title {
+                        Some(value) => {
+                            quote! { Self::#variant_name(..) => Some(#value.to_owned()) }
+                        }
+                        None => quote! { Self::#variant_name(..) => None },
+                    },
+                    Fields::Named(_) => match title {
+                        Some(value) => {
+                            quote! { Self::#variant_name { .. } => Some(#value.to_owned()) }
+                        }
+                        None => quote! { Self::#variant_name { .. } => None },
+                    },
+                }
+            });
+
+    let component_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let variant_name = &variant.ident;
+                let component = &result.component;
+
+                match &variant.fields {
+                    Fields::Unit => {
+                        quote! { Self::#variant_name => Box::new(#component()) }
+                    }
+                    Fields::Unnamed(fields) => {
+                        let params: Vec<_> = (0..fields.unnamed.len())
+                            .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
+                            .collect();
+
+                        quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) }
+                    }
+                    Fields::Named(fields) => {
+                        let params: Vec<_> = fields
+                            .named
+                            .iter()
+                            .map(|f| f.ident.as_ref().unwrap())
+                            .collect();
+
+                        quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) }
+                    }
+                }
+            });
+
+    let fa_icon_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let variant_name = &variant.ident;
+                let fa_icon = result.fa_icon.as_ref().zip(result.fa_icon_font.as_ref());
+
+                match &variant.fields {
+                    Fields::Unit => match fa_icon {
+                        Some((name, font)) => quote! { Self::#variant_name => Some((#name, #font)) },
+                        None => quote! { Self::#variant_name => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
+                    },
+                    Fields::Unnamed(_) => match fa_icon {
+                        Some((name, font)) => quote! { Self::#variant_name(..) => Some((#name, #font)) },
+                        None => quote! { Self::#variant_name(..) => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
+                    },
+                    Fields::Named(_) => match fa_icon {
+                        Some((name, font)) => quote! { Self::#variant_name { .. } => Some((#name, #font)) },
+                        None => quote! { Self::#variant_name { .. } => Some(("font-awesome", iced_font_awesome::IconFont::Solid)) },
+                    },
+                }
+            });
+
+    let icon_component_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let icon = &result.icon;
+
+                func_to_match(&variant, icon)
+            });
+
+    let settings_match =
+        enum_data
+            .variants
+            .iter()
+            .zip(variant_attrs.iter())
+            .map(|(variant, result)| {
+                let settings = &result.settings;
+
+                func_to_match(&variant, settings)
+            });
+
+    let expanded = quote! {
+        impl #trait_name for #enum_name {
+          type Message = #message_type;
+
+          fn title(&self) -> Option<String> {
+            match self {
+              #(#title_match),*
+            }
+          }
+
+          fn into_component(&self) -> Box<dyn iced_navigation::PageComponent<Self::Message>> {
+            match self {
+              #(#component_match),*
+            }
+          }
+
+          fn settings(&self) -> Option<iced_navigation::components::tabs::TabsSettings> {
+            match self {
+              #(#settings_match),*
+            }
+          }
+
+          fn fa_icon(&self) -> Option<(&str, iced_font_awesome::IconFont)> {
+            match self {
+              #(#fa_icon_match),*
+            }
+          }
+
+          fn icon(&self) -> Option<iced::Element<Self::Message>> {
+            match self {
+              #(#icon_component_match),*
             }
           }
         }
