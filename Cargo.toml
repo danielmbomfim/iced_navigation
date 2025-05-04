@@ -14,8 +14,10 @@ license = "MIT"
 [dependencies]
 iced = "0.13.1"
 iced_font_awesome = "0.2.1"
+iced_navigation_derive = { path = "./derive", optional = true }
 
 [features]
 tabs = []
 stack = []
-default = ["stack"]
+derive = ["iced_navigation_derive"]
+default = ["derive", "stack"]

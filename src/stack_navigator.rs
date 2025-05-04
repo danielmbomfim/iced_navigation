@@ -2,6 +2,9 @@ use std::{collections::HashMap, hash::Hash};
 
 use iced::widget::{column, horizontal_space};
 
+#[cfg(feature = "derive")]
+pub use iced_navigation_derive::StackNavigatorMapper;
+
 use crate::{
     animation::Frame,
     components::{
