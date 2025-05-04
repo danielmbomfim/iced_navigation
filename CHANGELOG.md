@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.2.0...v1.3.0) - 2025-05-04
+
+### Added
+
+- *(tabs)* add derive macros for automating trait implementations
+- *(stack)* add support to custom header components when using derive
+- *(stack)* add derive macros for automating trait implementations
+
+### Other
+
+- add bottom tabs example using derive macros
+- update macro dependencies and adapt code to API changes
+- *(stack)* create a stack customization example using the new macros
+- *(stack)* create a stack example using the new macros
+
 ## [1.2.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.1.0...v1.2.0) - 2025-03-03
 
 ### Added
