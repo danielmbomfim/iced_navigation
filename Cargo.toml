@@ -21,3 +21,7 @@ tabs = []
 stack = []
 derive = ["iced_navigation_derive"]
 default = ["derive", "stack"]
+
+
+[workspace]
+members = [".", "derive"]
