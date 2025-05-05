@@ -24,7 +24,10 @@ enum Page {
     LoginPage,
     #[page(title = "Home page", component = "home::HomePage::new")]
     HomePage(String),
-    #[page(title = "Details page", component = "details::DetailsPage::new")]
+    #[page(
+        title = "details::DetailsPage::title",
+        component = "details::DetailsPage::new"
+    )]
     Details(u32),
 }
 
@@ -196,6 +199,10 @@ pub mod details {
     impl DetailsPage {
         pub fn new(id: &u32) -> Self {
             Self { id: *id }
+        }
+
+        pub fn title(id: &u32) -> String {
+            format!("Details page {}", id)
         }
     }
 

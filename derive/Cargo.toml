@@ -1,6 +1,6 @@
 [package]
 name = "iced_navigation_derive"
-version = "0.1.0"
+version = "0.1.1"
 description = "macros for iced_navigation"
 edition = "2021"
 homepage = "https://github.com/danielmbomfim/iced_navigation"

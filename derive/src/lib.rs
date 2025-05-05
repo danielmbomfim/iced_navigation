@@ -151,8 +151,28 @@ pub fn navigator_message(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+enum PageTitle {
+    String(LitStr),
+    Function(Path),
+}
+
+impl proc_quote::ToTokens for PageTitle {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            PageTitle::String(lit_str) => {
+                let stringified = quote! { #lit_str.to_string() };
+                stringified.to_tokens(tokens);
+            }
+            PageTitle::Function(path) => {
+                let call = quote! { #path };
+                call.to_tokens(tokens);
+            }
+        }
+    }
+}
+
 struct StackPageAttributes {
-    title: LitStr,
+    title: PageTitle,
     component: Path,
     settings: Option<Path>,
     title_component: Option<Path>,
@@ -189,8 +209,13 @@ impl StackPageAttributes {
             match ident.as_deref() {
                 Some("title") => {
                     match meta.value()?.parse()? {
-                        Lit::Str(lit_str) => title = Some(lit_str),
-                        _ => return Err(meta.error("\"title\"  must be a string")),
+                        Lit::Str(value) => {
+                            match value.parse() {
+                                Ok(value) => title = Some(PageTitle::Function(value)),
+                                Err(_) => title = Some(PageTitle::String(value)),
+                            }
+                        },
+                        _ => return Err(meta.error("\"title\"  must be a string or a function, for example, #[page(title = \"your page title\")]")),
                     };
                 },
                 Some("component") => {
@@ -233,7 +258,7 @@ impl StackPageAttributes {
 
         Ok(Self {
             title: match title {
-                Some(value) => value.to_owned(),
+                Some(value) => value,
                 None => {
                     return Err(syn::Error::new_spanned(
                         attr,
@@ -335,7 +360,10 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
 
             match &variant.fields {
                 Fields::Unit => {
-                    title_match.push(quote! { Self::#variant_name => #title });
+                    title_match.push(match title {
+                        PageTitle::String(lit_str) => quote! { Self::#variant_name => #lit_str.to_string() },
+                        PageTitle::Function(path) => quote! { Self::#variant_name => #path() },
+                    });
                     component_match.push(quote! { Self::#variant_name => Box::new(#component()) });
 
                     settings_match.push(maybe_path![variant_name, settings]);
@@ -348,7 +376,10 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
                         .map(|i| Ident::new(&format!("arg{}", i), variant_name.span()))
                         .collect();
 
-                    title_match.push(quote! { Self::#variant_name(..) => #title });
+                    title_match.push(match title {
+                        PageTitle::String(lit_str) => quote! { Self::#variant_name(..) => #lit_str.to_owned() },
+                        PageTitle::Function(path) => quote! { Self::#variant_name(#(#params),*) => #path(#(#params),*) },
+                    });
                     component_match.push(quote! { Self::#variant_name(#(#params),*) => Box::new(#component(#(#params),*)) });
 
 
@@ -364,7 +395,10 @@ pub fn derive_stack_navigator_mapper(item: TokenStream) -> TokenStream {
                         .map(|f| f.ident.as_ref().unwrap())
                         .collect();
 
-                    title_match.push(quote! { Self::#variant_name { .. } => #title });
+                    title_match.push(match title {
+                        PageTitle::String(lit_str) => quote! { Self::#variant_name { .. } => #lit_str.to_owned() },
+                        PageTitle::Function(path) => quote! { Self::#variant_name { #(#params),* } => #path(#(#params),*) },
+                    });
                     component_match.push(quote! { Self::#variant_name { #(#params),* } => Box::new(#component(#(#params),*)) });
 
                     settings_match.push(maybe_path![variant_name, settings, &params, 0]);

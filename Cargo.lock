@@ -1454,7 +1454,7 @@ dependencies = [
 
 [[package]]
 name = "iced_navigation_derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro-crate 3.3.0",
  "proc-macro2",
