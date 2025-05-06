@@ -31,7 +31,7 @@ pub trait Navigator<PageMapper> {
 
     fn clear_history(&mut self);
 
-    fn pop_history(&mut self) -> Option<PageMapper>;
+    fn pop_history(&mut self);
 }
 
 pub trait NavigationConvertible {

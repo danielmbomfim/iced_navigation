@@ -50,6 +50,7 @@ where
     transition: bool,
     going_back: bool,
     reset_mode: bool,
+    pop_mode: bool,
 }
 
 impl<Message, PageMapper> StackNavigator<Message, PageMapper>
@@ -66,6 +67,7 @@ where
             going_back: false,
             transition: false,
             reset_mode: false,
+            pop_mode: false,
         };
 
         let widget = initial_page.into_component();
@@ -117,6 +119,11 @@ where
                 if completed && self.reset_mode {
                     self.reset_mode = false;
                     self.history.clear();
+                }
+
+                if completed && self.pop_mode {
+                    self.pop_mode = false;
+                    self.history.pop();
                 }
 
                 if completed {
@@ -182,8 +189,8 @@ where
         self.reset_mode = true;
     }
 
-    fn pop_history(&mut self) -> Option<PageMapper> {
-        self.history.pop()
+    fn pop_history(&mut self) {
+        self.pop_mode = true;
     }
 
     fn is_on_page(&self, page: PageMapper) -> bool {
