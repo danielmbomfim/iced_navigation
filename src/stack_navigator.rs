@@ -182,6 +182,10 @@ where
         self.reset_mode = true;
     }
 
+    fn pop_history(&mut self) -> Option<PageMapper> {
+        self.history.pop()
+    }
+
     fn is_on_page(&self, page: PageMapper) -> bool {
         self.current_page == page
     }

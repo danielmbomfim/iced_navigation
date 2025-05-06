@@ -30,6 +30,8 @@ pub trait Navigator<PageMapper> {
     fn is_on_page_and<F: Fn() -> bool>(&self, page: PageMapper, f: F) -> bool;
 
     fn clear_history(&mut self);
+
+    fn pop_history(&mut self) -> Option<PageMapper>;
 }
 
 pub trait NavigationConvertible {
