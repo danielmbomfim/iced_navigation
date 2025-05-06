@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.3.1...iced_navigation-v1.4.0) - 2025-05-06
+
+### Added
+
+- implement pop_history method in Navigator trait and StackNavigator
+
 ## [1.3.1](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.3.0...iced_navigation-v1.3.1) - 2025-05-05
 
 ### Fixed
