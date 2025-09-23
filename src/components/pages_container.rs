@@ -326,48 +326,19 @@ where
 
             let layers = layers.by_ref();
 
-            let mut draw_layer =
-                |i, anim, layer: &Element<'a, Message, Theme, Renderer>, state, layout, cursor| {
-                    if i > 0 {
-                        renderer.with_layer(clipped_viewport, |renderer| {
-                            match anim {
-                                Some(value) => renderer.with_translation(
-                                    Vector::new(container_width * value, 0.0),
-                                    |renderer| {
-                                        draw_background(renderer, &background_style, *viewport);
-
-                                        layer.as_widget().draw(
-                                            state,
-                                            renderer,
-                                            theme,
-                                            style,
-                                            layout,
-                                            cursor,
-                                            &clipped_viewport,
-                                        )
-                                    },
-                                ),
-                                None => {
-                                    draw_background(renderer, &background_style, *viewport);
-
-                                    layer.as_widget().draw(
-                                        state,
-                                        renderer,
-                                        theme,
-                                        style,
-                                        layout,
-                                        cursor,
-                                        &clipped_viewport,
-                                    );
-                                }
-                            };
-                        });
-                    } else {
+            let mut draw_layer = |i,
+                                  anim,
+                                  layer: &Element<'a, Message, Theme, Renderer>,
+                                  state,
+                                  layout,
+                                  cursor| {
+                if i > 0 {
+                    renderer.with_layer(clipped_viewport, |renderer| {
                         match anim {
                             Some(value) => renderer.with_translation(
                                 Vector::new(container_width * value, 0.0),
                                 |renderer| {
-                                    draw_background(renderer, &background_style, *viewport);
+                                    draw_background(renderer, &background_style, clipped_viewport);
 
                                     layer.as_widget().draw(
                                         state,
@@ -381,7 +352,7 @@ where
                                 },
                             ),
                             None => {
-                                draw_background(renderer, &background_style, *viewport);
+                                draw_background(renderer, &background_style, clipped_viewport);
 
                                 layer.as_widget().draw(
                                     state,
@@ -394,8 +365,41 @@ where
                                 );
                             }
                         };
-                    }
-                };
+                    });
+                } else {
+                    match anim {
+                        Some(value) => renderer.with_translation(
+                            Vector::new(container_width * value, 0.0),
+                            |renderer| {
+                                draw_background(renderer, &background_style, clipped_viewport);
+
+                                layer.as_widget().draw(
+                                    state,
+                                    renderer,
+                                    theme,
+                                    style,
+                                    layout,
+                                    cursor,
+                                    &clipped_viewport,
+                                )
+                            },
+                        ),
+                        None => {
+                            draw_background(renderer, &background_style, clipped_viewport);
+
+                            layer.as_widget().draw(
+                                state,
+                                renderer,
+                                theme,
+                                style,
+                                layout,
+                                cursor,
+                                &clipped_viewport,
+                            );
+                        }
+                    };
+                }
+            };
 
             let pages_number = self.children.len();
 
