@@ -8,7 +8,12 @@ pub mod stack_navigator;
 #[cfg(feature = "tabs")]
 pub mod tabs_navigator;
 
+#[cfg(feature = "drawer")]
+pub mod drawer_navigator;
+
 pub mod components {
+    #[cfg(feature = "drawer")]
+    pub mod drawer;
     pub mod header;
     pub(crate) mod pages_container;
     #[cfg(feature = "tabs")]

@@ -134,6 +134,8 @@ where
     Message: Clone + NavigationConvertible<PageMapper = PageMapper>,
     PageMapper: TabsNavigatorMapper<Message = Message> + Eq + Hash + Clone,
 {
+    fn pop_history(&mut self) {}
+
     fn clear_history(&mut self) {
         self.history.clear();
     }
