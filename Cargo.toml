@@ -19,6 +19,7 @@ iced_navigation_derive = { path = "./derive", version = "0.1.1", optional = true
 [features]
 tabs = []
 stack = []
+drawer = []
 derive = ["iced_navigation_derive"]
 default = ["derive", "stack"]
 

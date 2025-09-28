@@ -1,9 +1,9 @@
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Div;
 
+use iced::advanced::widget::tree::State;
 use iced::advanced::widget::{Operation, Tree};
-use iced::advanced::{layout, overlay, renderer};
+use iced::advanced::{layout, renderer};
 use iced::advanced::{Clipboard, Layout, Shell, Widget};
 use iced::event::{self, Event};
 use iced::mouse;
@@ -17,8 +17,8 @@ pub struct PagesContainer<'a, Message, Renderer = iced::Renderer> {
     disabed: HashSet<usize>,
     hidden: HashSet<usize>,
     animation_progress: Vec<Option<f32>>,
-    children: Vec<Element<'a, Message, Theme, Renderer>>,
-    elevated_frame: RefCell<Option<usize>>,
+    children: Vec<(u64, Element<'a, Message, Theme, Renderer>)>,
+    persistent_mode: bool,
 }
 
 impl<'a, Message, Renderer> PagesContainer<'a, Message, Renderer>
@@ -33,7 +33,7 @@ where
             disabed: HashSet::new(),
             hidden: HashSet::new(),
             animation_progress: Vec::new(),
-            elevated_frame: RefCell::new(None),
+            persistent_mode: false,
         }
     }
 
@@ -99,7 +99,16 @@ where
         self.n_progress(index, progress)
     }
 
-    pub fn push(mut self, child: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
+    pub fn persist(mut self, persist: bool) -> Self {
+        self.persistent_mode = persist;
+        self
+    }
+
+    pub fn push(
+        mut self,
+        id: u64,
+        child: impl Into<Element<'a, Message, Theme, Renderer>>,
+    ) -> Self {
         let child = child.into();
 
         if self.children.is_empty() {
@@ -109,25 +118,18 @@ where
             self.height = self.height.enclose(child_size.height);
         }
 
-        self.children.push(child);
+        self.children.push((id, child));
         self.animation_progress.push(None);
         self
     }
 
     pub fn extend(
         self,
-        children: impl IntoIterator<Item = Element<'a, Message, Theme, Renderer>>,
+        children: impl IntoIterator<Item = (u64, Element<'a, Message, Theme, Renderer>)>,
     ) -> Self {
-        children.into_iter().fold(self, Self::push)
-    }
-
-    pub fn elevate(self, index: usize) -> Self {
-        {
-            let mut elevated_frame = self.elevated_frame.borrow_mut();
-            *elevated_frame = Some(index);
-        }
-
-        self
+        children
+            .into_iter()
+            .fold(self, |container, (id, item)| container.push(id, item))
     }
 }
 
@@ -136,21 +138,56 @@ impl<'a, Message, Renderer> Widget<Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
+    fn state(&self) -> State {
+        State::new(self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>())
+    }
+
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        self.children
+            .iter()
+            .map(|(_, item)| Tree::new(item))
+            .collect()
     }
 
     fn diff(&self, tree: &mut Tree) {
-        let mut elevated_frame = self.elevated_frame.borrow_mut();
+        let ids = self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let children: Vec<_> = self.children.iter().map(|(_, item)| item).collect();
 
-        match elevated_frame.take() {
-            Some(value) => {
-                let element = tree.children.remove(value);
-                tree.children.push(element);
-                tree.diff_children(&self.children);
+        if self.children.len() < 2 || !self.persistent_mode {
+            tree.state = State::new(ids);
+            tree.diff_children(&children);
+            return;
+        }
+
+        let prev = match &tree.state {
+            State::Some(data) => data.downcast_ref::<Vec<u64>>().unwrap(),
+            State::None => {
+                tree.state = State::new(ids);
+                tree.diff_children(&children);
+                return;
             }
-            None => tree.diff_children(&self.children),
         };
+
+        if prev.len() > children.len() {
+            let old_id = prev.last().unwrap();
+            let index = ids.iter().rposition(|id| old_id == id);
+
+            if let Some(index) = index {
+                let element = tree.children.remove(tree.children.len() - 1);
+                let _ = std::mem::replace(&mut tree.children[index], element);
+            }
+        } else {
+            let current_id = ids.last().unwrap();
+            let index = prev.iter().rposition(|item| current_id == item);
+
+            if let Some(index) = index {
+                let element = std::mem::replace(&mut tree.children[index], Tree::empty());
+                tree.children.push(element);
+            }
+        }
+
+        tree.state = State::new(self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>());
+        tree.diff_children(&children);
     }
 
     fn size(&self) -> Size<Length> {
@@ -173,22 +210,22 @@ where
         }
 
         let base = self.children[0]
+            .1
             .as_widget()
             .layout(&mut tree.children[0], renderer, &limits);
 
         let size = limits.resolve(self.width, self.height, base.size());
         let limits = layout::Limits::new(Size::ZERO, size);
 
-        let nodes =
-            std::iter::once(base)
-                .chain(self.children[1..].iter().zip(&mut tree.children[1..]).map(
-                    |(layer, tree)| {
-                        let node = layer.as_widget().layout(tree, renderer, &limits);
+        let nodes = std::iter::once(base)
+            .chain(self.children[1..].iter().zip(&mut tree.children[1..]).map(
+                |((_, layer), tree)| {
+                    let node = layer.as_widget().layout(tree, renderer, &limits);
 
-                        node
-                    },
-                ))
-                .collect();
+                    node
+                },
+            ))
+            .collect();
 
         layout::Node::with_children(size, nodes)
     }
@@ -205,7 +242,7 @@ where
                 .iter()
                 .zip(&mut tree.children)
                 .zip(layout.children())
-                .for_each(|((child, state), layout)| {
+                .for_each(|(((_, child), state), layout)| {
                     child
                         .as_widget()
                         .operate(state, layout, renderer, operation);
@@ -234,7 +271,7 @@ where
             .zip(tree.children.iter_mut().rev())
             .zip(layout.children().rev())
             .filter_map(|((item, state), layout)| {
-                let (index, child) = item;
+                let (index, (_, child)) = item;
 
                 if self.disabed.contains(&index) {
                     return None;
@@ -282,7 +319,7 @@ where
             .zip(tree.children.iter().rev())
             .zip(layout.children().rev())
             .filter_map(|((item, state), layout)| {
-                let (index, child) = item;
+                let (index, (_, child)) = item;
 
                 if self.disabed.contains(&index) {
                     return None;
@@ -403,7 +440,7 @@ where
 
             let pages_number = self.children.len();
 
-            for (i, (((layer, animation_value), state), layout)) in layers {
+            for (i, ((((_, layer), animation_value), state), layout)) in layers {
                 if self.hidden.contains(&i) || pages_number > 2 && i <= pages_number - 3 {
                     continue;
                 }
@@ -411,16 +448,6 @@ where
                 draw_layer(i, animation_value, layer, state, layout, cursor);
             }
         }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        overlay::from_children(&mut self.children, tree, layout, renderer, translation)
     }
 }
 

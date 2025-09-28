@@ -1,6 +1,9 @@
 use iced::widget::column;
 use iced_font_awesome::IconFont;
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 #[cfg(feature = "derive")]
 pub use iced_navigation_derive::TabsNavigatorMapper;
@@ -13,7 +16,7 @@ use crate::{
     NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
-pub trait TabsNavigatorMapper {
+pub trait TabsNavigatorMapper: Hash {
     type Message: Clone + NavigationConvertible;
 
     fn title(&self) -> Option<String> {
@@ -33,6 +36,14 @@ pub trait TabsNavigatorMapper {
     fn settings(&self) -> Option<TabsSettings> {
         None
     }
+
+    fn get_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        self.hash(&mut hasher);
+
+        hasher.finish()
+    }
 }
 
 pub enum Position {
@@ -43,20 +54,19 @@ pub enum Position {
 pub struct TabsNavigator<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: TabsNavigatorMapper + Clone + Eq + Hash,
+    PageMapper: TabsNavigatorMapper + Clone + Eq,
 {
     position: Position,
     current_page: PageMapper,
-    pages: HashMap<PageMapper, Box<dyn PageComponent<Message>>>,
+    pages: HashMap<PageMapper, (u64, Box<dyn PageComponent<Message>>)>,
     history: Vec<PageMapper>,
     tabs: Tabs<Message, PageMapper>,
-    removed_page: Option<usize>,
 }
 
 impl<Message, PageMapper> TabsNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible<PageMapper = PageMapper>,
-    PageMapper: TabsNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: TabsNavigatorMapper<Message = Message> + Eq + Clone,
 {
     pub fn new(
         pages: impl Into<Vec<PageMapper>>,
@@ -68,14 +78,15 @@ where
             current_page: initial_page.clone(),
             pages: HashMap::new(),
             history: Vec::new(),
-            removed_page: None,
         };
 
         let widget = initial_page.into_component();
         let settings = initial_page.settings();
         let load_task = widget.on_load();
 
-        navigator.pages.insert(initial_page, widget);
+        let hashed_page = (initial_page.get_id(), widget);
+
+        navigator.pages.insert(initial_page, hashed_page);
         navigator.tabs.set_settings(settings);
 
         (navigator, load_task)
@@ -96,7 +107,7 @@ where
 
                     load_task = widget.on_load();
 
-                    self.pages.insert(page.clone(), widget);
+                    self.pages.insert(page.clone(), (page.get_id(), widget));
                 }
 
                 self.tabs.update_current_page(page.clone());
@@ -105,15 +116,6 @@ where
                 self.tabs.set_settings(settings);
 
                 self.history.push(old_page);
-
-                self.removed_page = self
-                    .history
-                    .iter()
-                    .position(|page| *page == self.current_page);
-
-                if let Some(index) = self.removed_page {
-                    self.history.remove(index);
-                }
 
                 load_task
             }
@@ -132,7 +134,7 @@ where
 impl<Message, PageMapper> Navigator<PageMapper> for TabsNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible<PageMapper = PageMapper>,
-    PageMapper: TabsNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: TabsNavigatorMapper<Message = Message> + Eq + Clone,
 {
     fn pop_history(&mut self) {}
 
@@ -152,29 +154,28 @@ where
 impl<Message, PageMapper> PageComponent<Message> for TabsNavigator<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: TabsNavigatorMapper<Message = Message> + Clone + Eq + Hash,
+    PageMapper: TabsNavigatorMapper<Message = Message> + Clone + Eq,
 {
     fn view(&self) -> iced::Element<Message> {
-        let page = self
+        let (id, page) = self
             .pages
             .get(&self.current_page)
             .expect("page should have been initialized");
 
-        let mut container = self
+        let container = self
             .history
             .iter()
             .fold(pages_container(), |container, page| {
-                let widget = self.pages.get(page).unwrap();
+                let (id, widget) = self.pages.get(page).unwrap();
 
-                container.push(widget.view()).disable_last(true)
+                container
+                    .push(*id, widget.view())
+                    .disable_last(true)
+                    .hide_last(true)
             })
-            .push(page.view())
-            .disable_last(false);
-
-        container = match self.removed_page {
-            Some(index) => container.elevate(index),
-            None => container,
-        };
+            .push(*id, page.view())
+            .disable_last(false)
+            .persist(true);
 
         match self.position {
             Position::Top => column![self.tabs.view(), container].into(),
@@ -186,6 +187,7 @@ where
         self.pages
             .get_mut(&self.current_page)
             .expect("page should have been initialized")
+            .1
             .update(message)
     }
 }

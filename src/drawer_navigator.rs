@@ -1,4 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 use iced::widget::{column, horizontal_space, row};
 
@@ -11,7 +14,7 @@ use crate::{
     NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
-pub trait DrawerNavigatorMapper {
+pub trait DrawerNavigatorMapper: Hash {
     type Message: Clone + NavigationConvertible;
 
     fn title(&self) -> String;
@@ -42,27 +45,35 @@ pub trait DrawerNavigatorMapper {
         &self,
     ) -> Option<Box<dyn DrawerOptionElement<Self::Message, PageMapper>>>
     where
-        PageMapper: DrawerNavigatorMapper + Eq + Hash + Clone,
+        PageMapper: DrawerNavigatorMapper + Eq + Clone,
     {
         None
+    }
+
+    fn get_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        self.hash(&mut hasher);
+
+        hasher.finish()
     }
 }
 
 pub struct DrawerNavigator<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: DrawerNavigatorMapper + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper + Eq + Clone,
 {
     current_page: PageMapper,
     drawer: Drawer<Message, PageMapper>,
-    pages: HashMap<PageMapper, (Header<Message>, Box<dyn PageComponent<Message>>)>,
+    pages: HashMap<PageMapper, (u64, Header<Message>, Box<dyn PageComponent<Message>>)>,
     history: Vec<PageMapper>,
 }
 
 impl<Message, PageMapper> DrawerNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible<PageMapper = PageMapper>,
-    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone,
 {
     pub fn new(
         pages: impl Into<Vec<PageMapper>>,
@@ -125,7 +136,7 @@ where
         &self,
         page: &PageMapper,
         widget: Box<dyn PageComponent<Message>>,
-    ) -> (Header<Message>, Box<dyn PageComponent<Message>>) {
+    ) -> (u64, Header<Message>, Box<dyn PageComponent<Message>>) {
         let mut header: Header<Message> = Header::new(page.title());
 
         header.set_settings(page.header_settings());
@@ -142,14 +153,14 @@ where
             header.set_title_widget(title);
         }
 
-        (header, widget)
+        (page.get_id(), header, widget)
     }
 }
 
 impl<Message, PageMapper> Navigator<PageMapper> for DrawerNavigator<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone,
 {
     fn pop_history(&mut self) {
         self.history.pop();
@@ -171,10 +182,10 @@ where
 impl<Message, PageMapper> PageComponent<Message> for DrawerNavigator<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: DrawerNavigatorMapper<Message = Message> + Clone + Eq + Hash,
+    PageMapper: DrawerNavigatorMapper<Message = Message> + Clone + Eq,
 {
     fn view(&self) -> iced::Element<Message> {
-        let (header, page) = self
+        let (id, header, page) = self
             .pages
             .get(&self.current_page)
             .expect("page should have been initialized");
@@ -195,23 +206,25 @@ where
             .history
             .iter()
             .fold(pages_container(), |container, page| {
-                let (header, widget) = self.pages.get(page).unwrap();
+                let (id, header, widget) = self.pages.get(page).unwrap();
 
                 container
-                    .push(column![header.view(), widget.view()])
+                    .push(*id, column![header.view(), widget.view()])
+                    .hide_last(true)
                     .disable_last(true)
             })
-            .push(page.view())
-            .disable_last(false);
+            .push(*id, column![header, page.view()])
+            .disable_last(false)
+            .persist(true);
 
-        row![self.drawer.view(), column![header, container]].into()
+        row![self.drawer.view(), container].into()
     }
 
     fn update(&mut self, message: Message) -> iced::Task<Message> {
         self.pages
             .get_mut(&self.current_page)
             .expect("page should have been initialized")
-            .1
+            .2
             .update(message)
     }
 }

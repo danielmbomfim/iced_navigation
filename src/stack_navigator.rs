@@ -1,4 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 use iced::widget::{column, horizontal_space};
 
@@ -14,7 +17,7 @@ use crate::{
     NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
-pub trait StackNavigatorMapper {
+pub trait StackNavigatorMapper: Hash {
     type Message: Clone + NavigationConvertible;
 
     fn title(&self) -> String;
@@ -36,15 +39,23 @@ pub trait StackNavigatorMapper {
     fn title_widget(&self) -> Option<Box<dyn HeaderTitleElement<Self::Message>>> {
         None
     }
+
+    fn get_id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+
+        self.hash(&mut hasher);
+
+        hasher.finish()
+    }
 }
 
 pub struct StackNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible,
-    PageMapper: Eq + Hash,
+    PageMapper: Eq,
 {
     current_page: PageMapper,
-    pages: HashMap<PageMapper, (Header<Message>, Box<dyn PageComponent<Message>>)>,
+    pages: HashMap<PageMapper, (u64, Header<Message>, Box<dyn PageComponent<Message>>)>,
     history: Vec<PageMapper>,
     anim_value: f32,
     transition: bool,
@@ -56,7 +67,7 @@ where
 impl<Message, PageMapper> StackNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible + Send + 'static,
-    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Clone,
 {
     pub fn new(initial_page: PageMapper) -> (Self, iced::Task<Message>) {
         let mut navigator = Self {
@@ -159,7 +170,7 @@ where
         &self,
         page: &PageMapper,
         widget: Box<dyn PageComponent<Message>>,
-    ) -> (Header<Message>, Box<dyn PageComponent<Message>>) {
+    ) -> (u64, Header<Message>, Box<dyn PageComponent<Message>>) {
         let mut header: Header<Message> = Header::new(page.title());
 
         header.set_settings(page.settings());
@@ -176,14 +187,14 @@ where
             header.set_title_widget(title);
         }
 
-        (header, widget)
+        (page.get_id(), header, widget)
     }
 }
 
 impl<Message, PageMapper> Navigator<PageMapper> for StackNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible + Send + 'static,
-    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq,
 {
     fn clear_history(&mut self) {
         self.reset_mode = true;
@@ -205,10 +216,10 @@ where
 impl<Message, PageMapper> PageComponent<Message> for StackNavigator<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible,
-    PageMapper: StackNavigatorMapper<Message = Message> + Eq + Hash,
+    PageMapper: StackNavigatorMapper<Message = Message> + Eq,
 {
     fn view(&self) -> iced::Element<Message> {
-        let (header, page) = self
+        let (id, header, page) = self
             .pages
             .get(&self.current_page)
             .expect("page should have been initialized");
@@ -228,7 +239,7 @@ where
         self.history
             .iter()
             .fold(pages_container(), |container, page| {
-                let (header, widget) = self.pages.get(page).unwrap();
+                let (id, header, widget) = self.pages.get(page).unwrap();
 
                 let header = if page.settings().is_none_or(|settings| settings.show_header) {
                     header.view()
@@ -237,7 +248,7 @@ where
                 };
 
                 container
-                    .push(column![header, widget.view()])
+                    .push(*id, column![header, widget.view()])
                     .disable_last(true)
                     .hide_last(!self.transition)
                     .n_progress_last(if self.transition {
@@ -246,7 +257,7 @@ where
                         None
                     })
             })
-            .push(column![header, page.view()])
+            .push(*id, column![header, page.view()])
             .disable_last(self.transition)
             .progress_last(if self.transition {
                 Some(self.anim_value)
@@ -257,7 +268,7 @@ where
     }
 
     fn update(&mut self, message: Message) -> iced::Task<Message> {
-        let (_, page) = self
+        let (_, _, page) = self
             .pages
             .get_mut(&self.current_page)
             .expect("page should have been initialized");

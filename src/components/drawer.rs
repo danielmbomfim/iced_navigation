@@ -1,4 +1,4 @@
-use std::{hash::Hash, marker::PhantomData};
+use std::marker::PhantomData;
 
 use iced::{
     widget::{button, column, container, text},
@@ -48,7 +48,7 @@ impl Default for DrawerItemsSettings {
 pub trait DrawerOptionElement<Message, PageMapper>
 where
     Message: Clone + NavigationConvertible,
-    PageMapper: DrawerNavigatorMapper + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper + Eq + Clone,
 {
     fn view<'a>(
         &'a self,
@@ -63,7 +63,7 @@ where
 pub struct Drawer<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: DrawerNavigatorMapper + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper + Clone,
 {
     options: Vec<(
         Box<dyn DrawerOptionElement<Message, PageMapper>>,
@@ -77,7 +77,7 @@ where
 impl<Message, PageMapper> Drawer<Message, PageMapper>
 where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
-    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone,
 {
     pub fn new(selected_page: PageMapper, options: Vec<PageMapper>) -> Self {
         Self {
@@ -137,7 +137,7 @@ pub struct DrawerOption;
 impl<Message, PageMapper> DrawerOptionElement<Message, PageMapper> for DrawerOption
 where
     Message: Clone + NavigationConvertible<PageMapper = PageMapper>,
-    PageMapper: DrawerNavigatorMapper + Eq + Hash + Clone,
+    PageMapper: DrawerNavigatorMapper + Eq + Clone,
 {
     fn view<'a>(
         &'a self,
