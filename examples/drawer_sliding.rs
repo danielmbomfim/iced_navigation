@@ -159,6 +159,7 @@ mod settings_page {
 mod app {
     use iced::{Element, Task};
     use iced_navigation::{
+        components::drawer::{DrawerMode, DrawerSettings},
         drawer_navigator::{DrawerNavigator, DrawerNavigatorMapper},
         NavigationAction, NavigationConvertible, PageComponent,
     };
@@ -201,6 +202,13 @@ mod app {
                 Page::Settings => Box::new(super::settings_page::Page),
             }
         }
+
+        fn settings(&self) -> Option<DrawerSettings> {
+            Some(DrawerSettings {
+                mode: DrawerMode::Sliding,
+                ..Default::default()
+            })
+        }
     }
 
     pub struct App {
@@ -231,7 +239,7 @@ mod app {
 
 #[cfg(feature = "drawer")]
 fn main() -> iced::Result {
-    iced::application("Drawer example", app::App::update, app::App::view)
+    iced::application("Sliding drawer example", app::App::update, app::App::view)
         .theme(|_| iced::Theme::KanagawaLotus)
         .run_with(app::App::new)
 }
