@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.4.1...iced_navigation-v1.5.0) - 2025-10-04
+
+### Added
+
+- *(drawer)* implements sliding mode
+- implements a new persistence logic
+- basic implementation of a drawer navigator
+
+### Fixed
+
+- *(drawer)* fix header visibility logic for fixed drawer mode
+- *(PagesContainer)* fix bug causing the background of the widget to be
+
+### Other
+
+- Merge pull request #9 from danielmbomfim/drawer-navigator
+- update README.md
+- *(drawer)* add sliding drawer example
+
 ## [1.4.1](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.4.0...iced_navigation-v1.4.1) - 2025-05-06
 
 ### Other
