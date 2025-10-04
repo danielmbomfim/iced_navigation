@@ -267,10 +267,11 @@ where
         let header_settings = self.current_page.header_settings();
 
         let header = if header_settings.is_none_or(|settings| settings.show_header) {
-            if matches![
-                self.current_page.settings().map(|s| s.mode),
-                Some(DrawerMode::Fixed)
-            ] {
+            if self
+                .current_page
+                .settings()
+                .is_none_or(|s| matches![s.mode, DrawerMode::Fixed])
+            {
                 header.hide_left_button(self.history.is_empty());
             }
 
