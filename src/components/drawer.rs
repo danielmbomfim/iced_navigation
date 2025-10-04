@@ -1,11 +1,22 @@
 use std::marker::PhantomData;
 
 use iced::{
-    widget::{button, column, container, text},
-    Alignment, Color, Element, Length, Padding, Theme,
+    widget::{button, column, container, text, vertical_space},
+    Alignment, Background, Color, Element, Length, Padding, Theme,
+};
+use iced_font_awesome::fa_icon_solid;
+
+use crate::{
+    components::header::{ButtonSettings, HeaderButtonElement},
+    drawer_navigator::{DrawerAction, DrawerNavigatorMapper},
+    NavigationAction, NavigationConvertible,
 };
 
-use crate::{drawer_navigator::DrawerNavigatorMapper, NavigationAction, NavigationConvertible};
+#[derive(Debug, Clone, Copy)]
+pub enum DrawerMode {
+    Fixed,
+    Sliding,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct DrawerSettings {
@@ -13,6 +24,7 @@ pub struct DrawerSettings {
     pub padding: Padding,
     pub background_color: Option<Color>,
     pub item_settings: DrawerItemsSettings,
+    pub mode: DrawerMode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -30,6 +42,7 @@ impl Default for DrawerSettings {
             padding: Padding::new(10.0).top(60),
             background_color: None,
             item_settings: DrawerItemsSettings::default(),
+            mode: DrawerMode::Fixed,
         }
     }
 }
@@ -195,4 +208,88 @@ where
         })
         .into()
     }
+}
+
+pub(crate) struct DrawerButton;
+
+impl<Message> HeaderButtonElement<Message> for DrawerButton
+where
+    Message: Clone + NavigationConvertible,
+{
+    fn view<'a>(&'a self, settings: &ButtonSettings) -> iced::Element<'a, Message>
+    where
+        Message: 'a,
+    {
+        let background = settings.background_color;
+        let icon_color = settings.icon_color;
+
+        button(
+            fa_icon_solid("bars")
+                .style(move |theme: &iced::Theme| {
+                    let pallete = theme.extended_palette();
+
+                    text::Style {
+                        color: icon_color.or_else(|| Some(pallete.primary.base.text)),
+                    }
+                })
+                .size(settings.icon_size),
+        )
+        .on_press(Message::from_action(NavigationAction::Drawer(
+            DrawerAction::Expand,
+        )))
+        .style(move |theme: &iced::Theme, status| match status {
+            button::Status::Active | button::Status::Pressed => button::Style {
+                background: Some(iced::Background::Color(
+                    background.unwrap_or(theme.palette().primary),
+                )),
+                ..Default::default()
+            },
+            button::Status::Hovered => button::Style {
+                background: {
+                    let mut color = background.unwrap_or(theme.palette().primary);
+
+                    color.a = 0.6;
+
+                    Some(iced::Background::Color(color))
+                },
+                ..Default::default()
+            },
+            button::Status::Disabled => button::Style {
+                background: {
+                    let mut color = background.unwrap_or(theme.palette().primary);
+
+                    color.a = 0.3;
+
+                    Some(iced::Background::Color(color))
+                },
+                ..Default::default()
+            },
+        })
+        .width(settings.width)
+        .height(settings.height)
+        .into()
+    }
+}
+
+pub fn overlay<'a, Message, PageMapper>() -> Element<'a, Message>
+where
+    Message: NavigationConvertible<PageMapper = PageMapper> + Clone + 'a,
+    PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone + 'a,
+{
+    button(vertical_space())
+        .style(|_, _| button::Style {
+            background: Some(Background::Color(Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.6,
+            })),
+            ..Default::default()
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .on_press(Message::from_action(NavigationAction::Drawer(
+            DrawerAction::Hide,
+        )))
+        .into()
 }

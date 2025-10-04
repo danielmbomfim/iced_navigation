@@ -127,6 +127,8 @@ where
                 iced::Task::none()
             }
             NavigationAction::Tick(_) => iced::Task::none(),
+            #[cfg(feature = "drawer")]
+            NavigationAction::Drawer(_) => iced::Task::none(),
         }
     }
 }

@@ -18,7 +18,11 @@ pub struct PagesContainer<'a, Message, Renderer = iced::Renderer> {
     hidden: HashSet<usize>,
     animation_progress: Vec<Option<f32>>,
     children: Vec<(u64, Element<'a, Message, Theme, Renderer>)>,
+    system_layers: usize,
+    visible_layers: usize,
+    no_background_layers: usize,
     persistent_mode: bool,
+    relative_mode: bool,
 }
 
 impl<'a, Message, Renderer> PagesContainer<'a, Message, Renderer>
@@ -33,7 +37,11 @@ where
             disabed: HashSet::new(),
             hidden: HashSet::new(),
             animation_progress: Vec::new(),
+            system_layers: 0,
+            visible_layers: 2,
+            no_background_layers: 0,
             persistent_mode: false,
+            relative_mode: false,
         }
     }
 
@@ -101,6 +109,31 @@ where
 
     pub fn persist(mut self, persist: bool) -> Self {
         self.persistent_mode = persist;
+
+        self
+    }
+
+    pub fn relative_anim(mut self, relative: bool) -> Self {
+        self.relative_mode = relative;
+
+        self
+    }
+
+    pub fn visible_layers(mut self, number: usize) -> Self {
+        self.visible_layers = number;
+
+        self
+    }
+
+    pub fn system_layers(mut self, number: usize) -> Self {
+        self.system_layers = number;
+
+        self
+    }
+
+    pub fn no_background_layers(mut self, number: usize) -> Self {
+        self.no_background_layers = number;
+
         self
     }
 
@@ -139,7 +172,13 @@ where
     Renderer: iced::advanced::Renderer,
 {
     fn state(&self) -> State {
-        State::new(self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>())
+        let user_layers_len = self.children.len() - self.system_layers;
+        State::new(
+            self.children[..user_layers_len]
+                .iter()
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>(),
+        )
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -150,10 +189,14 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        let ids = self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let user_layers_len = self.children.len() - self.system_layers;
+        let ids = self.children[..user_layers_len]
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
         let children: Vec<_> = self.children.iter().map(|(_, item)| item).collect();
 
-        if self.children.len() < 2 || !self.persistent_mode {
+        if user_layers_len < 2 || !self.persistent_mode {
             tree.state = State::new(ids);
             tree.diff_children(&children);
             return;
@@ -168,25 +211,25 @@ where
             }
         };
 
-        if prev.len() > children.len() {
+        if prev.len() > user_layers_len {
             let old_id = prev.last().unwrap();
             let index = ids.iter().rposition(|id| old_id == id);
 
             if let Some(index) = index {
-                let element = tree.children.remove(tree.children.len() - 1);
+                let element = tree.children.remove(prev.len() - 1);
                 let _ = std::mem::replace(&mut tree.children[index], element);
             }
-        } else {
+        } else if prev.len() != user_layers_len {
             let current_id = ids.last().unwrap();
             let index = prev.iter().rposition(|item| current_id == item);
 
             if let Some(index) = index {
                 let element = std::mem::replace(&mut tree.children[index], Tree::empty());
-                tree.children.push(element);
+                tree.children.insert(user_layers_len - 1, element);
             }
         }
 
-        tree.state = State::new(self.children.iter().map(|(id, _)| *id).collect::<Vec<_>>());
+        tree.state = State::new(ids);
         tree.diff_children(&children);
     }
 
@@ -346,7 +389,7 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let container_width = bounds.width;
+        let mut anim_area_width = bounds.width;
 
         let background = theme.palette().background;
         let background_style = container::Style::default().background(background);
@@ -367,15 +410,27 @@ where
                                   anim,
                                   layer: &Element<'a, Message, Theme, Renderer>,
                                   state,
-                                  layout,
-                                  cursor| {
+                                  layout: Layout<'_>,
+                                  cursor,
+                                  with_background| {
+                if self.relative_mode {
+                    let bounds = layout.bounds();
+                    anim_area_width = bounds.width;
+                }
+
                 if i > 0 {
                     renderer.with_layer(clipped_viewport, |renderer| {
                         match anim {
                             Some(value) => renderer.with_translation(
-                                Vector::new(container_width * value, 0.0),
+                                Vector::new(anim_area_width * value, 0.0),
                                 |renderer| {
-                                    draw_background(renderer, &background_style, clipped_viewport);
+                                    if with_background {
+                                        draw_background(
+                                            renderer,
+                                            &background_style,
+                                            clipped_viewport,
+                                        );
+                                    }
 
                                     layer.as_widget().draw(
                                         state,
@@ -389,7 +444,9 @@ where
                                 },
                             ),
                             None => {
-                                draw_background(renderer, &background_style, clipped_viewport);
+                                if with_background {
+                                    draw_background(renderer, &background_style, clipped_viewport);
+                                }
 
                                 layer.as_widget().draw(
                                     state,
@@ -406,9 +463,11 @@ where
                 } else {
                     match anim {
                         Some(value) => renderer.with_translation(
-                            Vector::new(container_width * value, 0.0),
+                            Vector::new(anim_area_width * value, 0.0),
                             |renderer| {
-                                draw_background(renderer, &background_style, clipped_viewport);
+                                if with_background {
+                                    draw_background(renderer, &background_style, clipped_viewport);
+                                }
 
                                 layer.as_widget().draw(
                                     state,
@@ -422,7 +481,9 @@ where
                             },
                         ),
                         None => {
-                            draw_background(renderer, &background_style, clipped_viewport);
+                            if with_background {
+                                draw_background(renderer, &background_style, clipped_viewport);
+                            }
 
                             layer.as_widget().draw(
                                 state,
@@ -440,12 +501,24 @@ where
 
             let pages_number = self.children.len();
 
-            for (i, ((((_, layer), animation_value), state), layout)) in layers {
-                if self.hidden.contains(&i) || pages_number > 2 && i <= pages_number - 3 {
+            for (i, ((((_, layer), animation_value), state), layout)) in
+                layers.skip(pages_number.saturating_sub(self.visible_layers))
+            {
+                if self.hidden.contains(&i) {
                     continue;
                 }
 
-                draw_layer(i, animation_value, layer, state, layout, cursor);
+                let with_background = i < pages_number - self.no_background_layers;
+
+                draw_layer(
+                    i,
+                    animation_value,
+                    layer,
+                    state,
+                    layout,
+                    cursor,
+                    with_background,
+                );
             }
         }
     }
