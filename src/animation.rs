@@ -1,6 +1,6 @@
 use iced::time::{Duration, Instant};
 
-const DURATION: f32 = 0.3;
+const DEFAULT_DURATION: f32 = 0.3;
 
 #[allow(missing_debug_implementations)]
 #[derive(Debug, Clone)]
@@ -15,10 +15,16 @@ impl Frame {
     pub fn new() -> Self {
         Self {
             start: Instant::now(),
-            duration: Duration::from_secs_f32(DURATION),
+            duration: Duration::from_secs_f32(DEFAULT_DURATION),
             percent: 0.0,
             f: None,
         }
+    }
+
+    pub fn duration(mut self, duration: impl Into<f32>) -> Self {
+        self.duration = Duration::from_secs_f32(duration.into());
+
+        self
     }
 
     pub fn map(mut self, f: fn(f32) -> f32) -> Self {

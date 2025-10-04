@@ -1,9 +1,9 @@
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Div;
 
+use iced::advanced::widget::tree::State;
 use iced::advanced::widget::{Operation, Tree};
-use iced::advanced::{layout, overlay, renderer};
+use iced::advanced::{layout, renderer};
 use iced::advanced::{Clipboard, Layout, Shell, Widget};
 use iced::event::{self, Event};
 use iced::mouse;
@@ -17,8 +17,12 @@ pub struct PagesContainer<'a, Message, Renderer = iced::Renderer> {
     disabed: HashSet<usize>,
     hidden: HashSet<usize>,
     animation_progress: Vec<Option<f32>>,
-    children: Vec<Element<'a, Message, Theme, Renderer>>,
-    elevated_frame: RefCell<Option<usize>>,
+    children: Vec<(u64, Element<'a, Message, Theme, Renderer>)>,
+    system_layers: usize,
+    visible_layers: usize,
+    no_background_layers: usize,
+    persistent_mode: bool,
+    relative_mode: bool,
 }
 
 impl<'a, Message, Renderer> PagesContainer<'a, Message, Renderer>
@@ -33,7 +37,11 @@ where
             disabed: HashSet::new(),
             hidden: HashSet::new(),
             animation_progress: Vec::new(),
-            elevated_frame: RefCell::new(None),
+            system_layers: 0,
+            visible_layers: 2,
+            no_background_layers: 0,
+            persistent_mode: false,
+            relative_mode: false,
         }
     }
 
@@ -99,7 +107,41 @@ where
         self.n_progress(index, progress)
     }
 
-    pub fn push(mut self, child: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
+    pub fn persist(mut self, persist: bool) -> Self {
+        self.persistent_mode = persist;
+
+        self
+    }
+
+    pub fn relative_anim(mut self, relative: bool) -> Self {
+        self.relative_mode = relative;
+
+        self
+    }
+
+    pub fn visible_layers(mut self, number: usize) -> Self {
+        self.visible_layers = number;
+
+        self
+    }
+
+    pub fn system_layers(mut self, number: usize) -> Self {
+        self.system_layers = number;
+
+        self
+    }
+
+    pub fn no_background_layers(mut self, number: usize) -> Self {
+        self.no_background_layers = number;
+
+        self
+    }
+
+    pub fn push(
+        mut self,
+        id: u64,
+        child: impl Into<Element<'a, Message, Theme, Renderer>>,
+    ) -> Self {
         let child = child.into();
 
         if self.children.is_empty() {
@@ -109,25 +151,18 @@ where
             self.height = self.height.enclose(child_size.height);
         }
 
-        self.children.push(child);
+        self.children.push((id, child));
         self.animation_progress.push(None);
         self
     }
 
     pub fn extend(
         self,
-        children: impl IntoIterator<Item = Element<'a, Message, Theme, Renderer>>,
+        children: impl IntoIterator<Item = (u64, Element<'a, Message, Theme, Renderer>)>,
     ) -> Self {
-        children.into_iter().fold(self, Self::push)
-    }
-
-    pub fn elevate(self, index: usize) -> Self {
-        {
-            let mut elevated_frame = self.elevated_frame.borrow_mut();
-            *elevated_frame = Some(index);
-        }
-
-        self
+        children
+            .into_iter()
+            .fold(self, |container, (id, item)| container.push(id, item))
     }
 }
 
@@ -136,21 +171,66 @@ impl<'a, Message, Renderer> Widget<Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
+    fn state(&self) -> State {
+        let user_layers_len = self.children.len() - self.system_layers;
+        State::new(
+            self.children[..user_layers_len]
+                .iter()
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        self.children
+            .iter()
+            .map(|(_, item)| Tree::new(item))
+            .collect()
     }
 
     fn diff(&self, tree: &mut Tree) {
-        let mut elevated_frame = self.elevated_frame.borrow_mut();
+        let user_layers_len = self.children.len() - self.system_layers;
+        let ids = self.children[..user_layers_len]
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+        let children: Vec<_> = self.children.iter().map(|(_, item)| item).collect();
 
-        match elevated_frame.take() {
-            Some(value) => {
-                let element = tree.children.remove(value);
-                tree.children.push(element);
-                tree.diff_children(&self.children);
+        if user_layers_len < 2 || !self.persistent_mode {
+            tree.state = State::new(ids);
+            tree.diff_children(&children);
+            return;
+        }
+
+        let prev = match &tree.state {
+            State::Some(data) => data.downcast_ref::<Vec<u64>>().unwrap(),
+            State::None => {
+                tree.state = State::new(ids);
+                tree.diff_children(&children);
+                return;
             }
-            None => tree.diff_children(&self.children),
         };
+
+        if prev.len() > user_layers_len {
+            let old_id = prev.last().unwrap();
+            let index = ids.iter().rposition(|id| old_id == id);
+
+            if let Some(index) = index {
+                let element = tree.children.remove(prev.len() - 1);
+                let _ = std::mem::replace(&mut tree.children[index], element);
+            }
+        } else if prev.len() != user_layers_len {
+            let current_id = ids.last().unwrap();
+            let index = prev.iter().rposition(|item| current_id == item);
+
+            if let Some(index) = index {
+                let element = std::mem::replace(&mut tree.children[index], Tree::empty());
+                tree.children.insert(user_layers_len - 1, element);
+            }
+        }
+
+        tree.state = State::new(ids);
+        tree.diff_children(&children);
     }
 
     fn size(&self) -> Size<Length> {
@@ -173,22 +253,22 @@ where
         }
 
         let base = self.children[0]
+            .1
             .as_widget()
             .layout(&mut tree.children[0], renderer, &limits);
 
         let size = limits.resolve(self.width, self.height, base.size());
         let limits = layout::Limits::new(Size::ZERO, size);
 
-        let nodes =
-            std::iter::once(base)
-                .chain(self.children[1..].iter().zip(&mut tree.children[1..]).map(
-                    |(layer, tree)| {
-                        let node = layer.as_widget().layout(tree, renderer, &limits);
+        let nodes = std::iter::once(base)
+            .chain(self.children[1..].iter().zip(&mut tree.children[1..]).map(
+                |((_, layer), tree)| {
+                    let node = layer.as_widget().layout(tree, renderer, &limits);
 
-                        node
-                    },
-                ))
-                .collect();
+                    node
+                },
+            ))
+            .collect();
 
         layout::Node::with_children(size, nodes)
     }
@@ -205,7 +285,7 @@ where
                 .iter()
                 .zip(&mut tree.children)
                 .zip(layout.children())
-                .for_each(|((child, state), layout)| {
+                .for_each(|(((_, child), state), layout)| {
                     child
                         .as_widget()
                         .operate(state, layout, renderer, operation);
@@ -234,7 +314,7 @@ where
             .zip(tree.children.iter_mut().rev())
             .zip(layout.children().rev())
             .filter_map(|((item, state), layout)| {
-                let (index, child) = item;
+                let (index, (_, child)) = item;
 
                 if self.disabed.contains(&index) {
                     return None;
@@ -282,7 +362,7 @@ where
             .zip(tree.children.iter().rev())
             .zip(layout.children().rev())
             .filter_map(|((item, state), layout)| {
-                let (index, child) = item;
+                let (index, (_, child)) = item;
 
                 if self.disabed.contains(&index) {
                     return None;
@@ -309,7 +389,7 @@ where
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let container_width = bounds.width;
+        let mut anim_area_width = bounds.width;
 
         let background = theme.palette().background;
         let background_style = container::Style::default().background(background);
@@ -326,48 +406,31 @@ where
 
             let layers = layers.by_ref();
 
-            let mut draw_layer =
-                |i, anim, layer: &Element<'a, Message, Theme, Renderer>, state, layout, cursor| {
-                    if i > 0 {
-                        renderer.with_layer(clipped_viewport, |renderer| {
-                            match anim {
-                                Some(value) => renderer.with_translation(
-                                    Vector::new(container_width * value, 0.0),
-                                    |renderer| {
-                                        draw_background(renderer, &background_style, *viewport);
+            let mut draw_layer = |i,
+                                  anim,
+                                  layer: &Element<'a, Message, Theme, Renderer>,
+                                  state,
+                                  layout: Layout<'_>,
+                                  cursor,
+                                  with_background| {
+                if self.relative_mode {
+                    let bounds = layout.bounds();
+                    anim_area_width = bounds.width;
+                }
 
-                                        layer.as_widget().draw(
-                                            state,
-                                            renderer,
-                                            theme,
-                                            style,
-                                            layout,
-                                            cursor,
-                                            &clipped_viewport,
-                                        )
-                                    },
-                                ),
-                                None => {
-                                    draw_background(renderer, &background_style, *viewport);
-
-                                    layer.as_widget().draw(
-                                        state,
-                                        renderer,
-                                        theme,
-                                        style,
-                                        layout,
-                                        cursor,
-                                        &clipped_viewport,
-                                    );
-                                }
-                            };
-                        });
-                    } else {
+                if i > 0 {
+                    renderer.with_layer(clipped_viewport, |renderer| {
                         match anim {
                             Some(value) => renderer.with_translation(
-                                Vector::new(container_width * value, 0.0),
+                                Vector::new(anim_area_width * value, 0.0),
                                 |renderer| {
-                                    draw_background(renderer, &background_style, *viewport);
+                                    if with_background {
+                                        draw_background(
+                                            renderer,
+                                            &background_style,
+                                            clipped_viewport,
+                                        );
+                                    }
 
                                     layer.as_widget().draw(
                                         state,
@@ -381,7 +444,9 @@ where
                                 },
                             ),
                             None => {
-                                draw_background(renderer, &background_style, *viewport);
+                                if with_background {
+                                    draw_background(renderer, &background_style, clipped_viewport);
+                                }
 
                                 layer.as_widget().draw(
                                     state,
@@ -394,29 +459,68 @@ where
                                 );
                             }
                         };
-                    }
-                };
+                    });
+                } else {
+                    match anim {
+                        Some(value) => renderer.with_translation(
+                            Vector::new(anim_area_width * value, 0.0),
+                            |renderer| {
+                                if with_background {
+                                    draw_background(renderer, &background_style, clipped_viewport);
+                                }
+
+                                layer.as_widget().draw(
+                                    state,
+                                    renderer,
+                                    theme,
+                                    style,
+                                    layout,
+                                    cursor,
+                                    &clipped_viewport,
+                                )
+                            },
+                        ),
+                        None => {
+                            if with_background {
+                                draw_background(renderer, &background_style, clipped_viewport);
+                            }
+
+                            layer.as_widget().draw(
+                                state,
+                                renderer,
+                                theme,
+                                style,
+                                layout,
+                                cursor,
+                                &clipped_viewport,
+                            );
+                        }
+                    };
+                }
+            };
 
             let pages_number = self.children.len();
 
-            for (i, (((layer, animation_value), state), layout)) in layers {
-                if self.hidden.contains(&i) || pages_number > 2 && i <= pages_number - 3 {
+            for (i, ((((_, layer), animation_value), state), layout)) in
+                layers.skip(pages_number.saturating_sub(self.visible_layers))
+            {
+                if self.hidden.contains(&i) {
                     continue;
                 }
 
-                draw_layer(i, animation_value, layer, state, layout, cursor);
+                let with_background = i < pages_number - self.no_background_layers;
+
+                draw_layer(
+                    i,
+                    animation_value,
+                    layer,
+                    state,
+                    layout,
+                    cursor,
+                    with_background,
+                );
             }
         }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        overlay::from_children(&mut self.children, tree, layout, renderer, translation)
     }
 }
 

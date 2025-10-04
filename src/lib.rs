@@ -3,12 +3,20 @@ use animation::Frame;
 #[cfg(feature = "derive")]
 pub use iced_navigation_derive::{navigator_message, NavigationConvertible};
 
+#[cfg(feature = "drawer")]
+use crate::drawer_navigator::DrawerAction;
+
 #[cfg(feature = "stack")]
 pub mod stack_navigator;
 #[cfg(feature = "tabs")]
 pub mod tabs_navigator;
 
+#[cfg(feature = "drawer")]
+pub mod drawer_navigator;
+
 pub mod components {
+    #[cfg(feature = "drawer")]
+    pub mod drawer;
     pub mod header;
     pub(crate) mod pages_container;
     #[cfg(feature = "tabs")]
@@ -22,6 +30,8 @@ pub enum NavigationAction<PageMapper> {
     Navigate(PageMapper),
     Tick(Frame),
     GoBack,
+    #[cfg(feature = "drawer")]
+    Drawer(DrawerAction),
 }
 
 pub trait Navigator<PageMapper> {
