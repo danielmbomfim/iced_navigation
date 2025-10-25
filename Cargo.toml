@@ -1,7 +1,7 @@
 [package]
 name = "iced_navigation"
 version = "1.4.0"
-edition = "2021"
+edition = "2024"
 description = "Navigation library for the iced GUI framework"
 homepage = "https://github.com/danielmbomfim/iced_navigation"
 repository = "https://github.com/danielmbomfim/iced_navigation"
@@ -12,9 +12,12 @@ authors = ["Daniel M. Bomfim"]
 license = "MIT"
 
 [dependencies]
-iced = "0.13.1"
-iced_font_awesome = "0.2.1"
+iced = { git = "https://github.com/iced-rs/iced", features = ["advanced"] }
+iced_font_awesome = { path = "../iced_font_awesome" }
+wgpu = "=0.20.1"
+zbus = "5.11.0"
 iced_navigation_derive = { path = "./derive", version = "0.1.1", optional = true }
+indexmap = "2.11.4"
 
 [features]
 tabs = []

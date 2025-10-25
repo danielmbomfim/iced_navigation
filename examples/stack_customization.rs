@@ -1,3 +1,4 @@
+#![allow(mismatched_lifetime_syntaxes)]
 use iced::{color, Element, Task};
 use iced_navigation::{
     components::header::{
@@ -220,5 +221,5 @@ impl App {
 }
 
 fn main() -> iced::Result {
-    iced::application("Stack customization", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }

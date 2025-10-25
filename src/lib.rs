@@ -1,3 +1,4 @@
+#![allow(mismatched_lifetime_syntaxes)]
 use animation::Frame;
 
 #[cfg(feature = "derive")]
@@ -22,6 +23,8 @@ pub mod components {
     #[cfg(feature = "tabs")]
     pub mod tabs;
 }
+
+pub mod base;
 
 pub(crate) mod animation;
 
