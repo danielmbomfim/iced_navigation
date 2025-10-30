@@ -271,7 +271,7 @@ where
                             .layout(&mut tree.children[0], renderer, &limits),
                     )
                 }
-                None => Some(layout::Node::new(Size::ZERO)),
+                _ => Some(layout::Node::new(Size::ZERO)),
             }
         } else {
             self.cache[0] = None;
@@ -316,7 +316,7 @@ where
                     el.as_widget_mut()
                         .layout(&mut tree.children[tree_index], renderer, &limits)
                 }
-                None => layout::Node::new(Size::ZERO),
+                _ => layout::Node::new(Size::ZERO),
             }
         };
 

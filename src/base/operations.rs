@@ -35,6 +35,17 @@ where
 
                 value.clear_history();
             }
+
+            #[cfg(feature = "tabs")]
+            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.clear_history();
+            }
         }
     }
 
@@ -64,6 +75,17 @@ where
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
             if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.pop_history();
+            }
+
+            #[cfg(feature = "tabs")]
+            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -109,6 +131,17 @@ where
 
                 value.go_back();
             }
+
+            #[cfg(feature = "tabs")]
+            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.go_back();
+            }
         }
     }
 
@@ -138,6 +171,17 @@ where
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
             if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.navigate(self.page.take().unwrap());
+            }
+
+            #[cfg(feature = "tabs")]
+            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {

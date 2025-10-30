@@ -3,10 +3,14 @@ use iced::Element;
 pub mod operations;
 #[cfg(feature = "stack")]
 pub mod stack_navigator;
+#[cfg(feature = "tabs")]
+pub mod tabs_navigator;
 
+#[allow(dead_code)]
 pub(crate) enum NavigatorPage<'a, Params, Message, Theme, Renderer = iced::Renderer> {
     Direct(Element<'a, Message, Theme, Renderer>),
     Closure(Box<dyn Fn(Params) -> Element<'a, Message, Theme, Renderer>>),
+    None,
 }
 
 pub(crate) trait NavigatorState {
