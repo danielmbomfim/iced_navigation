@@ -2,7 +2,7 @@
 use animation::Frame;
 
 #[cfg(feature = "derive")]
-pub use iced_navigation_derive::{navigator_message, NavigationConvertible};
+pub use iced_navigation_derive::{NavigationConvertible, navigator_message};
 
 #[cfg(feature = "drawer")]
 use crate::drawer_navigator::DrawerAction;

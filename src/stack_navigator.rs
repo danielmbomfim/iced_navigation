@@ -3,18 +3,21 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use iced::widget::{column, horizontal_space};
+use iced::{
+    Length,
+    widget::{Space, column},
+};
 
 #[cfg(feature = "derive")]
 pub use iced_navigation_derive::StackNavigatorMapper;
 
 use crate::{
+    NavigationAction, NavigationConvertible, Navigator, PageComponent,
     animation::Frame,
     components::{
         header::{Header, HeaderButtonElement, HeaderSettings, HeaderTitleElement},
         pages_container::pages_container,
     },
-    NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
 pub trait StackNavigatorMapper: Hash {
@@ -235,7 +238,7 @@ where
 
             header.view()
         } else {
-            horizontal_space().into()
+            Space::new().width(Length::Fill).into()
         };
 
         self.history
@@ -246,7 +249,7 @@ where
                 let header = if page.settings().is_none_or(|settings| settings.show_header) {
                     header.view()
                 } else {
-                    horizontal_space().into()
+                    Space::new().width(Length::Fill).into()
                 };
 
                 container

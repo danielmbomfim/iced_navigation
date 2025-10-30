@@ -1,8 +1,8 @@
 #[cfg(feature = "tabs")]
 mod article_page {
     use iced::{
-        widget::{column, text},
         Element, Task,
+        widget::{column, text},
     };
     use iced_navigation::PageComponent;
 
@@ -21,7 +21,7 @@ mod article_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             column![
                   text("Article\n").size(30),
                   text(concat!(
@@ -50,8 +50,8 @@ mod article_page {
 #[cfg(feature = "tabs")]
 mod list_page {
     use iced::{
-        widget::{row, scrollable, text, Column},
         Element, Length, Task,
+        widget::{Column, row, scrollable, text},
     };
     use iced_navigation::PageComponent;
 
@@ -98,7 +98,7 @@ mod list_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             scrollable(
                 NAMES
                     .iter()
@@ -124,8 +124,8 @@ mod list_page {
 #[cfg(feature = "tabs")]
 mod settings_page {
     use iced::{
-        widget::{column, container, text},
         Alignment, Element, Length, Task,
+        widget::{column, container, text},
     };
     use iced_font_awesome::fa_icon_solid;
     use iced_navigation::PageComponent;
@@ -145,7 +145,7 @@ mod settings_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             column![
                 text("Profile\n").size(30),
                 container(fa_icon_solid("circle-user").size(200.0).style(|theme: &iced::Theme| {
@@ -177,10 +177,10 @@ mod settings_page {
 mod app {
     use iced::{Element, Task};
     use iced_navigation::{
+        NavigationConvertible, PageComponent,
         components::tabs::{TabItemSetting, TabsSettings},
         navigator_message,
         tabs_navigator::{TabsNavigator, TabsNavigatorMapper},
-        NavigationConvertible, PageComponent,
     };
 
     #[navigator_message(Page)]
@@ -243,7 +243,7 @@ mod app {
             self.nav.handle_actions(action.clone())
         }
 
-        pub fn view(&self) -> Element<Message> {
+        pub fn view<'a>(&'a self) -> Element<'a, Message> {
             self.nav.view()
         }
     }
@@ -251,9 +251,11 @@ mod app {
 
 #[cfg(feature = "tabs")]
 fn main() -> iced::Result {
-    iced::application("Bottom tabs example", app::App::update, app::App::view)
-        .theme(|_| iced::Theme::KanagawaLotus)
-        .run_with(app::App::new)
+    use iced::Theme;
+
+    iced::application(app::App::new, app::App::update, app::App::view)
+        .theme(|_: &app::App| Theme::KanagawaLotus)
+        .run()
 }
 
 #[cfg(not(feature = "tabs"))]

@@ -1,15 +1,15 @@
 use std::marker::PhantomData;
 
 use iced::{
-    widget::{button, column, container, text, vertical_space},
     Alignment, Background, Color, Element, Length, Padding, Theme,
+    widget::{Space, button, column, container, text},
 };
 use iced_font_awesome::fa_icon_solid;
 
 use crate::{
+    NavigationAction, NavigationConvertible,
     components::header::{ButtonSettings, HeaderButtonElement},
     drawer_navigator::{DrawerAction, DrawerNavigatorMapper},
-    NavigationAction, NavigationConvertible,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -276,7 +276,7 @@ where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone + 'a,
     PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone + 'a,
 {
-    button(vertical_space())
+    button(Space::new().height(Length::Fill))
         .style(|_, _| button::Style {
             background: Some(Background::Color(Color {
                 r: 0.0,

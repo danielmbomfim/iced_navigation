@@ -4,18 +4,18 @@ use std::{
 };
 
 use iced::{
-    widget::{column, horizontal_space, row},
-    Task,
+    Length, Task,
+    widget::{Space, column, row},
 };
 
 use crate::{
+    NavigationAction, NavigationConvertible, Navigator, PageComponent,
     animation::Frame,
     components::{
-        drawer::{overlay, Drawer, DrawerButton, DrawerMode, DrawerOptionElement, DrawerSettings},
+        drawer::{Drawer, DrawerButton, DrawerMode, DrawerOptionElement, DrawerSettings, overlay},
         header::{Header, HeaderButtonElement, HeaderSettings, HeaderTitleElement},
         pages_container::pages_container,
     },
-    NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -277,7 +277,7 @@ where
 
             header.view()
         } else {
-            horizontal_space().into()
+            Space::new().width(Length::Fill).into()
         };
 
         let container = self

@@ -9,11 +9,11 @@ use std::{
 pub use iced_navigation_derive::TabsNavigatorMapper;
 
 use crate::{
+    NavigationAction, NavigationConvertible, Navigator, PageComponent,
     components::{
         pages_container::pages_container,
         tabs::{Tabs, TabsSettings},
     },
-    NavigationAction, NavigationConvertible, Navigator, PageComponent,
 };
 
 pub trait TabsNavigatorMapper: Hash {

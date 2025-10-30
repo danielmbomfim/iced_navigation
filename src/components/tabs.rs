@@ -1,11 +1,11 @@
 use iced::{
-    widget::{button, container, text, Column, Row},
     Alignment, Color, Length,
+    widget::{Column, Row, button, container, text},
 };
 use iced_font_awesome::FaIcon;
 use std::marker::PhantomData;
 
-use crate::{tabs_navigator::TabsNavigatorMapper, NavigationAction, NavigationConvertible};
+use crate::{NavigationAction, NavigationConvertible, tabs_navigator::TabsNavigatorMapper};
 
 pub struct TabsSettings {
     pub width: Length,
@@ -109,8 +109,8 @@ where
                 let item_container: iced::Element<Message> =
                     if self.settings.item_setting.horizontal {
                         Row::new()
-                            .push_maybe(icon)
-                            .push_maybe(page.title().map(|title| {
+                            .push(icon)
+                            .push(page.title().map(|title| {
                                 text(title)
                                     .size(self.settings.item_setting.text_size)
                                     .style(move |theme: &iced::Theme| {
@@ -137,8 +137,8 @@ where
                             .into()
                     } else {
                         Column::new()
-                            .push_maybe(icon)
-                            .push_maybe(page.title().map(|title| {
+                            .push(icon)
+                            .push(page.title().map(|title| {
                                 text(title)
                                     .size(self.settings.item_setting.text_size)
                                     .style(move |theme: &iced::Theme| {
