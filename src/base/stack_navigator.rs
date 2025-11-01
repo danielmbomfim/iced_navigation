@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::mem::Discriminant;
 use std::ops::{Div, Neg};
 
+use iced::Padding;
 use iced::advanced::graphics::core::window;
 use iced::advanced::widget::Operation;
 use iced::widget::Id;
@@ -107,8 +108,10 @@ where
     height: Length,
     home_page: Key,
     cache: [Option<Element<'a, Message, Theme, Renderer>>; 2],
+    header_cache: [Option<Element<'a, Message, Theme, Renderer>>; 2],
     children:
         HashMap<Discriminant<Key>, NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
+    header_element: Option<NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
 }
 
 impl<'a, Key, Message, Renderer> StackNavigator<'a, Key, Message, Renderer>
@@ -122,7 +125,9 @@ where
             height: Length::Fill,
             children: HashMap::new(),
             cache: [None, None],
+            header_cache: [None, None],
             home_page,
+            header_element: None,
         }
     }
 
@@ -165,6 +170,17 @@ where
 
         self
     }
+
+    pub fn header_widget(
+        mut self,
+        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+    ) -> Self {
+        let item = NavigatorPage::Closure(Box::new(fun));
+
+        self.header_element = Some(item);
+
+        self
+    }
 }
 
 impl<'a, Key, Message, Renderer> Widget<Message, Theme, Renderer>
@@ -195,7 +211,7 @@ where
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::empty()]
+        vec![Tree::empty(), Tree::empty()]
     }
 
     fn operate(
@@ -209,11 +225,11 @@ where
 
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
-        if state.history_len() < tree.children.len() {
+        if state.history_len() + 2 < tree.children.len() {
             tree.children.truncate(state.history_len());
         } else if state.previous_page.is_some() {
             let size = tree.children.len();
-            tree.children.swap(size - 1, size - 2);
+            tree.children.swap(size - 1, size - 3);
         }
     }
 
@@ -230,18 +246,39 @@ where
         let mut size = None;
         let state = tree.state.downcast_mut::<State<Key>>();
 
-        if state.history_len() > tree.children.len() {
+        if state.history_len() + 2 > tree.children.len() {
             tree.children.push(Tree::empty());
         }
 
         let base = if let Some(transition) = state.transition.as_ref()
             && let Some(key) = state.get_previous_key()
         {
-            let tree_index = state.history_len() - 2;
-            let disc = std::mem::discriminant(key);
+            let page_index = tree.children.len() - 3;
+            let header_index = tree.children.len() - 4;
 
-            match self.children.get_mut(&disc) {
-                Some(NavigatorPage::Closure(builder)) => {
+            let disc = std::mem::discriminant(key);
+            let mut items: Vec<_> = Vec::with_capacity(2);
+
+            if let Some(NavigatorPage::Closure(builder)) = self.header_element.as_ref() {
+                let params = PageParams {
+                    page: key.clone(),
+                    can_go_back: match transition {
+                        Transition::Foward => state.history.len() > 2,
+                        Transition::Back => true,
+                    },
+                };
+
+                let el = builder(params);
+
+                tree.children[header_index].diff(&el);
+
+                items.push(el);
+            } else {
+                self.header_cache[0] = None;
+            };
+
+            let (page, moved) =
+                if let Some(NavigatorPage::Closure(builder)) = self.children.get_mut(&disc) {
                     let params = PageParams {
                         page: key.clone(),
                         can_go_back: match transition {
@@ -250,35 +287,62 @@ where
                         },
                     };
 
-                    let mut el = builder(params);
-                    tree.children[tree_index].diff(&el);
+                    let el = builder(params);
+                    tree.children[page_index].diff(&el);
 
-                    let node = el.as_widget_mut().layout(
-                        &mut tree.children[tree_index],
-                        renderer,
-                        &limits,
-                    );
+                    (Some(el), false)
+                } else if let Some(NavigatorPage::Direct(el)) =
+                    self.children.insert(disc, NavigatorPage::None)
+                {
+                    tree.children[page_index].diff(&el);
 
-                    self.cache[0] = Some(el);
-                    Some(node)
-                }
-                Some(NavigatorPage::Direct(el)) => {
-                    self.cache[0] = None;
-                    tree.children[tree_index].diff(&*el);
+                    (Some(el), true)
+                } else {
+                    (None, false)
+                };
 
-                    Some(
-                        el.as_widget_mut()
-                            .layout(&mut tree.children[0], renderer, &limits),
-                    )
-                }
-                _ => Some(layout::Node::new(Size::ZERO)),
+            if let Some(page) = page {
+                items.push(page);
             }
+
+            let node = layout::flex::resolve(
+                layout::flex::Axis::Vertical,
+                renderer,
+                &limits,
+                self.width,
+                self.height,
+                Padding::ZERO,
+                0.0,
+                iced::Alignment::Start,
+                &mut items,
+                &mut tree.children[if self.header_element.is_some() {
+                    header_index
+                } else {
+                    page_index
+                }..page_index + 1],
+            );
+
+            if items.len() > 1 {
+                self.header_cache[0] = Some(items.remove(0));
+            } else {
+                self.header_cache[0] = None;
+            }
+
+            if moved {
+                self.children
+                    .insert(disc, NavigatorPage::Direct(items.remove(0)));
+                self.cache[0] = None;
+            } else {
+                self.cache[0] = Some(items.remove(0));
+            }
+
+            Some(node)
         } else {
             self.cache[0] = None;
             None
         };
 
-        let head = {
+        let main_page = {
             let limits = if let Some(value) = &base {
                 size = Some(limits.resolve(self.width, self.height, value.size()));
                 layout::Limits::new(Size::ZERO, size.unwrap())
@@ -286,38 +350,85 @@ where
                 limits
             };
 
-            let tree_index = tree.children.len() - 1;
+            let page_index = tree.children.len() - 1;
+            let header_index = tree.children.len() - 2;
+
             let key = state.history.last().unwrap();
             let disc = std::mem::discriminant(key);
+            let mut items: Vec<_> = Vec::with_capacity(2);
 
-            match self.children.get_mut(&disc) {
-                Some(NavigatorPage::Closure(builder)) => {
+            if let Some(NavigatorPage::Closure(builder)) = self.header_element.as_ref() {
+                let params = PageParams {
+                    page: key.clone(),
+                    can_go_back: state.history.len() > 1,
+                };
+
+                let el = builder(params);
+
+                tree.children[header_index].diff(&el);
+
+                items.push(el);
+            } else {
+                self.header_cache[1] = None;
+            };
+
+            let (page, moved) =
+                if let Some(NavigatorPage::Closure(builder)) = self.children.get_mut(&disc) {
                     let params = PageParams {
                         page: key.clone(),
                         can_go_back: state.history.len() > 1,
                     };
 
-                    let mut el = builder(params);
-                    tree.children[tree_index].diff(&el);
+                    let el = builder(params);
+                    tree.children[page_index].diff(&el);
 
-                    let node = el.as_widget_mut().layout(
-                        &mut tree.children[tree_index],
-                        renderer,
-                        &limits,
-                    );
+                    (Some(el), false)
+                } else if let Some(NavigatorPage::Direct(el)) =
+                    self.children.insert(disc, NavigatorPage::None)
+                {
+                    tree.children[page_index].diff(&el);
 
-                    self.cache[1] = Some(el);
-                    node
-                }
-                Some(NavigatorPage::Direct(el)) => {
-                    self.cache[1] = None;
-                    tree.children[tree_index].diff(&*el);
+                    (Some(el), true)
+                } else {
+                    (None, false)
+                };
 
-                    el.as_widget_mut()
-                        .layout(&mut tree.children[tree_index], renderer, &limits)
-                }
-                _ => layout::Node::new(Size::ZERO),
+            if let Some(page) = page {
+                items.push(page);
             }
+
+            let node = layout::flex::resolve(
+                layout::flex::Axis::Vertical,
+                renderer,
+                &limits,
+                self.width,
+                self.height,
+                Padding::ZERO,
+                0.0,
+                iced::Alignment::Start,
+                &mut items,
+                &mut tree.children[if self.header_element.is_some() {
+                    header_index
+                } else {
+                    page_index
+                }..page_index + 1],
+            );
+
+            if items.len() > 1 {
+                self.header_cache[1] = Some(items.remove(0));
+            } else {
+                self.header_cache[1] = None;
+            }
+
+            if moved {
+                self.children
+                    .insert(disc, NavigatorPage::Direct(items.remove(0)));
+                self.cache[1] = None;
+            } else {
+                self.cache[1] = Some(items.remove(0));
+            }
+
+            node
         };
 
         let mut nodes = Vec::with_capacity(2);
@@ -325,10 +436,10 @@ where
         if let Some(node) = base {
             nodes.push(node);
         } else {
-            size = Some(limits.resolve(self.width, self.height, head.size()));
+            size = Some(limits.resolve(self.width, self.height, main_page.size()));
         }
 
-        nodes.push(head);
+        nodes.push(main_page);
         layout::Node::with_children(size.unwrap(), nodes)
     }
 
@@ -360,7 +471,7 @@ where
 
                     if state.previous_page.is_some() {
                         state.previous_page = None;
-                        tree.children.remove(tree.children.len() - 2);
+                        tree.children.remove(tree.children.len() - 3);
                         shell.invalidate_layout();
                         shell.request_redraw();
                         return;
@@ -377,17 +488,32 @@ where
             return;
         }
 
+        let layout = layout.children().last().unwrap();
+
+        if let Some(header) = self.header_cache[1].as_mut() {
+            let header_index = tree.children.len() - 2;
+
+            header.as_widget_mut().update(
+                &mut tree.children[header_index],
+                event,
+                layout.child(0),
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
+
         if let Some(value) = self.cache.last_mut() {
             let widget_state = tree.children.last_mut().unwrap();
-            let mut children_layout: Vec<_> = layout.children().collect();
-            let layout = children_layout.last_mut().unwrap();
 
             match value {
                 Some(element) => {
                     element.as_widget_mut().update(
                         widget_state,
                         event,
-                        *layout,
+                        layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
                         cursor,
                         renderer,
                         clipboard,
@@ -405,7 +531,7 @@ where
                         element.as_widget_mut().update(
                             widget_state,
                             event,
-                            *layout,
+                            layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
                             cursor,
                             renderer,
                             clipboard,
@@ -432,41 +558,52 @@ where
             return mouse::Interaction::default();
         }
 
-        if let Some(value) = self.cache.last() {
-            let widget_state = tree.children.last().unwrap();
-            let mut children_layout: Vec<_> = layout.children().collect();
-            let layout = children_layout.last_mut().unwrap();
+        let children_number = tree.children.len();
 
-            match value {
-                Some(element) => element.as_widget().mouse_interaction(
-                    widget_state,
-                    *layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                ),
-                None => {
-                    let key = state.history.last().unwrap();
-                    let disc = std::mem::discriminant(key);
+        let page_state = &tree.children[children_number - 1];
+        let header_state = &tree.children[children_number - 2];
 
-                    let widget = self.children.get(&disc).unwrap();
+        let layout = layout.children().last().unwrap();
 
-                    if let NavigatorPage::Direct(element) = widget {
-                        element.as_widget().mouse_interaction(
-                            widget_state,
-                            *layout,
-                            cursor,
-                            viewport,
-                            renderer,
-                        )
-                    } else {
-                        mouse::Interaction::default()
-                    }
+        let header_interaction = if let Some(header) = self.header_cache[1].as_ref() {
+            Some(header.as_widget().mouse_interaction(
+                header_state,
+                layout.child(0),
+                cursor,
+                viewport,
+                renderer,
+            ))
+        } else {
+            None
+        };
+
+        header_interaction.unwrap_or_else(|| match self.cache[1].as_ref() {
+            Some(element) => element.as_widget().mouse_interaction(
+                page_state,
+                layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
+                cursor,
+                viewport,
+                renderer,
+            ),
+            None => {
+                let key = state.history.last().unwrap();
+                let disc = std::mem::discriminant(key);
+
+                let widget = self.children.get(&disc).unwrap();
+
+                if let NavigatorPage::Direct(element) = widget {
+                    element.as_widget().mouse_interaction(
+                        page_state,
+                        layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
+                        cursor,
+                        viewport,
+                        renderer,
+                    )
+                } else {
+                    mouse::Interaction::default()
                 }
             }
-        } else {
-            mouse::Interaction::default()
-        }
+        })
     }
 
     fn draw(
@@ -486,7 +623,7 @@ where
         let bounds = layout.bounds();
         let nav_state = tree.state.downcast_ref::<State<Key>>();
 
-        if let Some(clipped_viewport) = bounds.intersection(viewport) {
+        if let Some(mut clipped_viewport) = bounds.intersection(viewport) {
             let children_layout: Vec<_> = layout.children().collect();
             let children_len = tree.children.len();
 
@@ -500,35 +637,80 @@ where
                 && let Some(value) = self.cache.get(0)
                 && let Some(key) = nav_state.get_previous_key()
             {
-                let history_state = tree.children.get(children_len - 2).unwrap();
-                let history_layout = children_layout[0];
+                let mut clipped_viewport = clipped_viewport.clone();
+                let page_state = tree.children.get(children_len - 3).unwrap();
+                let page_layout = children_layout[0].children().collect::<Vec<_>>();
 
                 match value {
-                    Some(element) => draw_layer(
-                        base_transition,
-                        element,
-                        &history_state,
-                        renderer,
-                        theme,
-                        style,
-                        history_layout,
-                        cursor,
-                        &clipped_viewport,
-                    ),
+                    Some(element) => {
+                        if let Some(element) = self.header_cache[0].as_ref() {
+                            let header_state = tree.children.get(children_len - 4).unwrap();
+
+                            let offset = page_layout[0].bounds().height;
+
+                            draw_layer(
+                                base_transition,
+                                element,
+                                header_state,
+                                renderer,
+                                theme,
+                                style,
+                                page_layout[0],
+                                cursor,
+                                &clipped_viewport,
+                            );
+
+                            clipped_viewport.height -= offset;
+                            clipped_viewport.y += offset;
+                        }
+
+                        draw_layer(
+                            base_transition,
+                            element,
+                            &page_state,
+                            renderer,
+                            theme,
+                            style,
+                            *page_layout.last().unwrap(),
+                            cursor,
+                            &clipped_viewport,
+                        );
+                    }
                     None => {
                         let disc = std::mem::discriminant(key);
 
                         let widget = self.children.get(&disc).unwrap();
 
                         if let NavigatorPage::Direct(element) = widget {
+                            if let Some(element) = self.header_cache[0].as_ref() {
+                                let header_state = tree.children.get(children_len - 4).unwrap();
+
+                                let offset = page_layout[0].bounds().height;
+
+                                draw_layer(
+                                    base_transition,
+                                    element,
+                                    header_state,
+                                    renderer,
+                                    theme,
+                                    style,
+                                    page_layout[0],
+                                    cursor,
+                                    &clipped_viewport,
+                                );
+
+                                clipped_viewport.height -= offset;
+                                clipped_viewport.y += offset;
+                            }
+
                             draw_layer(
                                 base_transition,
                                 element,
-                                &history_state,
+                                &page_state,
                                 renderer,
                                 theme,
                                 style,
-                                history_layout,
+                                *page_layout.last().unwrap(),
                                 cursor,
                                 &clipped_viewport,
                             );
@@ -537,45 +719,88 @@ where
                 };
             }
 
-            if let Some(value) = self.cache.last() {
-                let head_state = tree.children.get(children_len - 1).unwrap();
-                let head_layout = children_layout.last().unwrap();
+            let page_state = tree.children.get(children_len - 1).unwrap();
+            let page_layout = children_layout
+                .last()
+                .unwrap()
+                .children()
+                .collect::<Vec<_>>();
 
-                match value {
-                    Some(element) => renderer.with_layer(clipped_viewport, |renderer| {
+            match self.cache[1].as_ref() {
+                Some(element) => renderer.with_layer(clipped_viewport, |renderer| {
+                    if let Some(element) = self.header_cache[1].as_ref() {
+                        let header_state = tree.children.get(children_len - 2).unwrap();
+
+                        let offset = page_layout[0].bounds().height;
+
                         draw_layer(
                             main_transition,
                             element,
-                            head_state,
+                            header_state,
                             renderer,
                             theme,
                             style,
-                            *head_layout,
+                            page_layout[0],
                             cursor,
                             &clipped_viewport,
                         );
-                    }),
-                    None => {
-                        let key = nav_state.history.last().unwrap();
-                        let disc = std::mem::discriminant(key);
 
-                        let widget = self.children.get(&disc).unwrap();
+                        clipped_viewport.height -= offset;
+                        clipped_viewport.y += offset;
+                    }
 
-                        if let NavigatorPage::Direct(element) = widget {
-                            renderer.with_layer(clipped_viewport, |renderer| {
+                    draw_layer(
+                        main_transition,
+                        element,
+                        page_state,
+                        renderer,
+                        theme,
+                        style,
+                        *page_layout.last().unwrap(),
+                        cursor,
+                        &clipped_viewport,
+                    );
+                }),
+                None => {
+                    let key = nav_state.history.last().unwrap();
+                    let disc = std::mem::discriminant(key);
+
+                    let widget = self.children.get(&disc).unwrap();
+
+                    if let NavigatorPage::Direct(element) = widget {
+                        renderer.with_layer(clipped_viewport, |renderer| {
+                            if let Some(element) = self.header_cache[1].as_ref() {
+                                let header_state = tree.children.get(children_len - 2).unwrap();
+                                let offset = page_layout[0].bounds().height;
+
                                 draw_layer(
                                     main_transition,
                                     element,
-                                    head_state,
+                                    header_state,
                                     renderer,
                                     theme,
                                     style,
-                                    *head_layout,
+                                    page_layout[0],
                                     cursor,
                                     &clipped_viewport,
                                 );
-                            });
-                        }
+
+                                clipped_viewport.height -= offset;
+                                clipped_viewport.y += offset;
+                            }
+
+                            draw_layer(
+                                main_transition,
+                                element,
+                                page_state,
+                                renderer,
+                                theme,
+                                style,
+                                *page_layout.last().unwrap(),
+                                cursor,
+                                &clipped_viewport,
+                            );
+                        });
                     }
                 }
             }
