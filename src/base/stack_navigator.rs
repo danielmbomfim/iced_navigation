@@ -55,6 +55,7 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
         self.history.push(page);
         self.frame = Some(Frame::new());
         self.transition = Some(Transition::Foward);
+        self.previous_page = None;
     }
 
     fn go_back(&mut self) {
@@ -112,6 +113,7 @@ where
     children:
         HashMap<Discriminant<Key>, NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
     header_element: Option<NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
+    on_navigation_end: Option<Box<dyn Fn(Option<Key>, Key) -> Message + 'a>>,
 }
 
 impl<'a, Key, Message, Renderer> StackNavigator<'a, Key, Message, Renderer>
@@ -128,6 +130,7 @@ where
             header_cache: [None, None],
             home_page,
             header_element: None,
+            on_navigation_end: None,
         }
     }
 
@@ -181,12 +184,22 @@ where
 
         self
     }
+
+    pub fn on_navigation_end(
+        mut self,
+        on_navigation_end: impl Fn(Option<Key>, Key) -> Message + 'a,
+    ) -> Self {
+        self.on_navigation_end = Some(Box::new(on_navigation_end));
+
+        self
+    }
 }
 
 impl<'a, Key, Message, Renderer> Widget<Message, Theme, Renderer>
     for StackNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone + 'static,
+    Message: Clone,
     Renderer: iced::advanced::Renderer,
 {
     fn tag(&self) -> tree::Tag {
@@ -469,12 +482,23 @@ where
                     state.frame = None;
                     state.transition = None;
 
-                    if state.previous_page.is_some() {
-                        state.previous_page = None;
+                    if let Some(previous) = state.previous_page.as_ref() {
                         tree.children.remove(tree.children.len() - 3);
                         shell.invalidate_layout();
                         shell.request_redraw();
+
+                        if let Some(on_navigation_end) = self.on_navigation_end.as_ref() {
+                            shell.publish(on_navigation_end(
+                                Some(previous.clone()),
+                                state.history.last().cloned().unwrap(),
+                            ));
+                        }
                         return;
+                    } else if let Some(on_navigation_end) = self.on_navigation_end.as_ref() {
+                        shell.publish(on_navigation_end(
+                            state.get_previous_key().cloned(),
+                            state.history.last().cloned().unwrap(),
+                        ));
                     }
                 } else {
                     frame.update()
@@ -873,7 +897,7 @@ impl<'a, Key, Message, Renderer> From<StackNavigator<'a, Key, Message, Renderer>
     for Element<'a, Message, Theme, Renderer>
 where
     Key: 'static + Eq + Hash + Clone,
-    Message: 'a,
+    Message: 'a + Clone,
     Renderer: 'a + iced::advanced::Renderer,
 {
     fn from(stack: StackNavigator<'a, Key, Message, Renderer>) -> Self {
