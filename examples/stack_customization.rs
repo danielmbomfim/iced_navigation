@@ -97,7 +97,11 @@ pub mod custom_header_elements {
     pub struct CustomHeader;
 
     impl<Message> HeaderTitleElement<Message> for CustomHeader {
-        fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<Message> {
+        fn view<'a>(
+            &'a self,
+            title: String,
+            settings: &TitleSettings,
+        ) -> iced::Element<'a, Message> {
             let text_color = settings.title_color;
 
             text!("Custom title: {}", title)
@@ -164,7 +168,7 @@ pub mod page_a {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             column![text(concat!(
                 "Wellcome to page A, click on the button on the ",
                 "right top corner to move to the next page",
@@ -188,7 +192,7 @@ pub mod page_b {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             text("Wellcome to page B").into()
         }
     }
@@ -214,11 +218,11 @@ impl App {
         self.nav.update(message)
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         self.nav.view()
     }
 }
 
 fn main() -> iced::Result {
-    iced::application("Stack customization", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }

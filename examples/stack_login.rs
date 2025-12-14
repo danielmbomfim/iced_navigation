@@ -108,7 +108,7 @@ pub mod login {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             container(
                 column![
                     text_input("Username", &self.username)
@@ -124,7 +124,7 @@ pub mod login {
                     )
                     .on_press(Message::LoginRequest)
                 ]
-                .push_maybe(
+                .push(
                     self.error
                         .as_ref()
                         .map(|message| text(message).color(color!(255, 0, 0))),
@@ -144,8 +144,8 @@ pub mod login {
 
 pub mod home {
     use iced::{
-        widget::{button, column, container, horizontal_space, row, scrollable, text},
-        Alignment, Element, Task,
+        widget::{button, column, container, row, scrollable, text, Space},
+        Alignment, Element, Length, Task,
     };
     use iced_navigation::{NavigationAction, NavigationConvertible, PageComponent};
 
@@ -166,7 +166,7 @@ pub mod home {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             scrollable(
                 column![
                     container(text!("Welcome {}!", self.name).size(30)).align_x(Alignment::Center),
@@ -186,7 +186,7 @@ pub mod home {
                         "illum qui dolorem eum fugiat quo voluptas nulla pariatur?"
                     )),
                     row![
-                        horizontal_space(),
+                        Space::new().width(Length::Fill),
                         button(text("details")).on_press(Message::from_action(
                             NavigationAction::Navigate(Page::Details(1))
                         ))
@@ -225,7 +225,7 @@ pub mod details {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             scrollable(
                 column![
                     container(text!("Details number {}", self.id).size(30))
@@ -305,11 +305,11 @@ impl App {
         self.nav.update(message)
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         self.nav.view()
     }
 }
 
 fn main() -> iced::Result {
-    iced::application("Stack login example", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }

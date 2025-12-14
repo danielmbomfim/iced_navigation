@@ -51,7 +51,7 @@ pub trait NavigationConvertible {
 }
 
 pub trait PageComponent<Message> {
-    fn view(&self) -> iced::Element<Message>;
+    fn view<'a>(&'a self) -> iced::Element<'a, Message>;
 
     fn update(&mut self, message: Message) -> iced::Task<Message>;
 

@@ -25,7 +25,7 @@ pub trait TabsNavigatorMapper: Hash {
 
     fn into_component(&self) -> Box<dyn PageComponent<Self::Message>>;
 
-    fn icon(&self) -> Option<iced::Element<Self::Message>> {
+    fn icon<'a>(&'a self) -> Option<iced::Element<'a, Self::Message>> {
         None
     }
 
@@ -158,7 +158,7 @@ where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
     PageMapper: TabsNavigatorMapper<Message = Message> + Clone + Eq,
 {
-    fn view(&self) -> iced::Element<Message> {
+    fn view<'a>(&'a self) -> iced::Element<'a, Message> {
         let (id, page) = self
             .pages
             .get(&self.current_page)

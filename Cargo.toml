@@ -12,8 +12,8 @@ authors = ["Daniel M. Bomfim"]
 license = "MIT"
 
 [dependencies]
-iced = "0.13.1"
-iced_font_awesome = "0.2.1"
+iced = "0.14.0"
+iced_font_awesome = "0.4.1"
 iced_navigation_derive = { path = "./derive", version = "0.1.1", optional = true }
 
 [features]

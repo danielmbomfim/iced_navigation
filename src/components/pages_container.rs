@@ -5,9 +5,10 @@ use iced::advanced::widget::tree::State;
 use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{layout, renderer};
 use iced::advanced::{Clipboard, Layout, Shell, Widget};
-use iced::event::{self, Event};
+use iced::event::Event;
 use iced::mouse;
 use iced::widget::container::{self, draw_background};
+
 use iced::Theme;
 use iced::{Element, Length, Rectangle, Size, Vector};
 
@@ -241,7 +242,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
@@ -252,58 +253,64 @@ where
             return layout::Node::new(limits.resolve(self.width, self.height, Size::ZERO));
         }
 
-        let base = self.children[0]
-            .1
-            .as_widget()
-            .layout(&mut tree.children[0], renderer, &limits);
+        let base =
+            self.children[0]
+                .1
+                .as_widget_mut()
+                .layout(&mut tree.children[0], renderer, &limits);
 
         let size = limits.resolve(self.width, self.height, base.size());
         let limits = layout::Limits::new(Size::ZERO, size);
 
         let nodes = std::iter::once(base)
-            .chain(self.children[1..].iter().zip(&mut tree.children[1..]).map(
-                |((_, layer), tree)| {
-                    let node = layer.as_widget().layout(tree, renderer, &limits);
+            .chain(
+                self.children[1..]
+                    .iter_mut()
+                    .zip(&mut tree.children[1..])
+                    .map(|((_, layer), tree)| {
+                        let node = layer.as_widget_mut().layout(tree, renderer, &limits);
 
-                    node
-                },
-            ))
+                        node
+                    }),
+            )
             .collect();
 
         layout::Node::with_children(size, nodes)
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.container(None, layout.bounds(), &mut |operation| {
+        operation.container(None, layout.bounds());
+        operation.traverse(&mut |operation| {
             self.children
-                .iter()
+                .iter_mut()
                 .zip(&mut tree.children)
                 .zip(layout.children())
-                .for_each(|(((_, child), state), layout)| {
+                .for_each(|((child, state), layout)| {
                     child
-                        .as_widget()
+                        .1
+                        .as_widget_mut()
                         .operate(state, layout, renderer, operation);
                 });
         });
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         mut cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         let is_over_scroll = matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. }))
             && cursor.is_over(layout.bounds());
 
@@ -313,22 +320,15 @@ where
             .rev()
             .zip(tree.children.iter_mut().rev())
             .zip(layout.children().rev())
-            .filter_map(|((item, state), layout)| {
+            .for_each(|((item, state), layout)| {
                 let (index, (_, child)) = item;
 
                 if self.disabed.contains(&index) {
-                    return None;
+                    return;
                 }
 
-                let status = child.as_widget_mut().on_event(
-                    state,
-                    event.clone(),
-                    layout,
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
+                child.as_widget_mut().update(
+                    state, event, layout, cursor, renderer, clipboard, shell, viewport,
                 );
 
                 if is_over_scroll && cursor != mouse::Cursor::Unavailable {
@@ -340,11 +340,7 @@ where
                         cursor = mouse::Cursor::Unavailable;
                     }
                 }
-
-                Some(status)
-            })
-            .find(|&status| status == event::Status::Captured)
-            .unwrap_or(event::Status::Ignored)
+            });
     }
 
     fn mouse_interaction(
