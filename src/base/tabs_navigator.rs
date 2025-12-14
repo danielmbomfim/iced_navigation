@@ -26,6 +26,7 @@ pub enum Mode {
 #[derive(Debug, Clone)]
 pub struct State<Key: Eq + Hash> {
     pub(crate) history: Vec<Key>,
+    pub(crate) previous_page: Option<Key>,
     pub(crate) pending_update: bool,
 }
 
@@ -41,11 +42,16 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
     }
 
     fn get_previous_key(&self) -> Option<&Key> {
+        if self.previous_page.is_some() {
+            return self.previous_page.as_ref();
+        }
+
         self.history.get(self.history.len() - 2)
     }
 
     fn navigate(&mut self, page: Key) {
         self.history.push(page);
+        self.previous_page = None;
     }
 
     fn go_back(&mut self) {
@@ -53,7 +59,7 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
             return;
         }
 
-        self.history.pop();
+        self.previous_page = self.history.pop();
     }
 
     fn clear_history(&mut self) {
@@ -205,6 +211,7 @@ where
     fn state(&self) -> tree::State {
         tree::State::new(State {
             pending_update: false,
+            previous_page: None,
             history: vec![self.home_page.clone()],
         })
     }
