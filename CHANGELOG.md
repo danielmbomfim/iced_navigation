@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.5.0...iced_navigation-v1.6.0) - 2025-12-14
+
+### Added
+
+- *(iced)* update iced to 0.14
+
+### Other
+
+- update README.md
+
 ## [1.5.0](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.4.1...iced_navigation-v1.5.0) - 2025-10-04
 
 ### Added
