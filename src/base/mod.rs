@@ -1,5 +1,7 @@
 use iced::Element;
 
+#[cfg(feature = "drawer")]
+pub mod drawer_navigator;
 pub mod operations;
 #[cfg(feature = "stack")]
 pub mod stack_navigator;

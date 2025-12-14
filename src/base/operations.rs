@@ -46,6 +46,17 @@ where
 
                 value.clear_history();
             }
+
+            #[cfg(feature = "drawer")]
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.clear_history();
+            }
         }
     }
 
@@ -86,6 +97,17 @@ where
 
             #[cfg(feature = "tabs")]
             if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.pop_history();
+            }
+
+            #[cfg(feature = "drawer")]
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -142,6 +164,17 @@ where
 
                 value.go_back();
             }
+
+            #[cfg(feature = "drawer")]
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.go_back();
+            }
         }
     }
 
@@ -190,12 +223,97 @@ where
 
                 value.navigate(self.page.take().unwrap());
             }
+
+            #[cfg(feature = "drawer")]
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.navigate(self.page.take().unwrap());
+            }
         }
     }
 
     Navigate {
         target,
         page: Some(page),
+    }
+}
+
+#[cfg(feature = "drawer")]
+fn open_drawer_op<T, Key>(target: Option<Id>) -> impl Operation<T>
+where
+    Key: 'static + Eq + Hash + Clone + Send,
+{
+    struct OpenDrawer<Key> {
+        target: Option<Id>,
+        p: PhantomData<Key>,
+    }
+
+    impl<T, Key> Operation<T> for OpenDrawer<Key>
+    where
+        Key: 'static + Eq + Hash + Clone + Send,
+    {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self)
+        }
+
+        fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.open_drawer();
+            }
+        }
+    }
+
+    OpenDrawer {
+        target,
+        p: PhantomData::<Key>,
+    }
+}
+
+#[cfg(feature = "drawer")]
+fn close_drawer_op<T, Key>(target: Option<Id>) -> impl Operation<T>
+where
+    Key: 'static + Eq + Hash + Clone + Send,
+{
+    struct CloseDrawer<Key> {
+        target: Option<Id>,
+        p: PhantomData<Key>,
+    }
+
+    impl<T, Key> Operation<T> for CloseDrawer<Key>
+    where
+        Key: 'static + Eq + Hash + Clone + Send,
+    {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self)
+        }
+
+        fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
+            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.close_drawer();
+            }
+        }
+    }
+
+    CloseDrawer {
+        target,
+        p: PhantomData::<Key>,
     }
 }
 
@@ -261,4 +379,40 @@ where
     T: 'static + Send,
 {
     operate(pop_history_op::<T, P>(Some(target)))
+}
+
+#[cfg(feature = "drawer")]
+pub fn open_drawer<T, P>() -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(open_drawer_op::<T, P>(None))
+}
+
+#[cfg(feature = "drawer")]
+pub fn open_drawer_by_id<T, P>(target: Id) -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(open_drawer_op::<T, P>(Some(target)))
+}
+
+#[cfg(feature = "drawer")]
+pub fn close_drawer<T, P>() -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(close_drawer_op::<T, P>(None))
+}
+
+#[cfg(feature = "drawer")]
+pub fn close_drawer_by_id<T, P>(target: Id) -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(close_drawer_op::<T, P>(Some(target)))
 }
