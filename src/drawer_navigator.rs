@@ -4,8 +4,8 @@ use std::{
 };
 
 use iced::{
-    widget::{column, horizontal_space, row},
-    Task,
+    widget::{column, row, Space},
+    Length, Task,
 };
 
 use crate::{
@@ -252,7 +252,7 @@ where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone,
     PageMapper: DrawerNavigatorMapper<Message = Message> + Clone + Eq,
 {
-    fn view(&self) -> iced::Element<Message> {
+    fn view<'a>(&'a self) -> iced::Element<'a, Message> {
         let mode = self
             .current_page
             .settings()
@@ -277,7 +277,7 @@ where
 
             header.view()
         } else {
-            horizontal_space().into()
+            Space::new().width(Length::Fill).into()
         };
 
         let container = self

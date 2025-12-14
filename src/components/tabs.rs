@@ -76,7 +76,7 @@ where
         self.settings = settings.unwrap_or_else(TabsSettings::default)
     }
 
-    pub fn view(&self) -> iced::Element<Message> {
+    pub fn view<'a>(&'a self) -> iced::Element<'a, Message> {
         let tabs = self
             .pages
             .iter()
@@ -109,8 +109,8 @@ where
                 let item_container: iced::Element<Message> =
                     if self.settings.item_setting.horizontal {
                         Row::new()
-                            .push_maybe(icon)
-                            .push_maybe(page.title().map(|title| {
+                            .push(icon)
+                            .push(page.title().map(|title| {
                                 text(title)
                                     .size(self.settings.item_setting.text_size)
                                     .style(move |theme: &iced::Theme| {
@@ -137,8 +137,8 @@ where
                             .into()
                     } else {
                         Column::new()
-                            .push_maybe(icon)
-                            .push_maybe(page.title().map(|title| {
+                            .push(icon)
+                            .push(page.title().map(|title| {
                                 text(title)
                                     .size(self.settings.item_setting.text_size)
                                     .style(move |theme: &iced::Theme| {

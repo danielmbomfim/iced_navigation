@@ -15,7 +15,7 @@ mod article_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             column![
                   text("Article\n").size(30),
                   text(concat!(
@@ -86,7 +86,7 @@ mod list_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             scrollable(
                 NAMES
                     .iter()
@@ -127,7 +127,7 @@ mod settings_page {
             Task::none()
         }
 
-        fn view(&self) -> Element<Message> {
+        fn view<'a>(&'a self) -> Element<'a, Message> {
             column![
                 text("Profile\n").size(30),
                 container(fa_icon_solid("circle-user").size(200.0).style(|theme: &iced::Theme| {
@@ -242,7 +242,7 @@ mod app {
             self.nav.handle_actions(action.clone())
         }
 
-        pub fn view(&self) -> Element<Message> {
+        pub fn view<'a>(&'a self) -> Element<'a, Message> {
             self.nav.view()
         }
     }
@@ -250,9 +250,9 @@ mod app {
 
 #[cfg(feature = "tabs")]
 fn main() -> iced::Result {
-    iced::application("Bottom tabs example", app::App::update, app::App::view)
-        .theme(|_| iced::Theme::KanagawaLotus)
-        .run_with(app::App::new)
+    iced::application(app::App::new, app::App::update, app::App::view)
+        .theme(iced::Theme::KanagawaLotus)
+        .run()
 }
 
 #[cfg(not(feature = "tabs"))]

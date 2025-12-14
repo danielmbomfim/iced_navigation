@@ -3,7 +3,10 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
-use iced::widget::{column, horizontal_space};
+use iced::{
+    widget::{column, Space},
+    Length,
+};
 
 #[cfg(feature = "derive")]
 pub use iced_navigation_derive::StackNavigatorMapper;
@@ -220,7 +223,7 @@ where
     Message: Clone + NavigationConvertible,
     PageMapper: StackNavigatorMapper<Message = Message> + Eq,
 {
-    fn view(&self) -> iced::Element<Message> {
+    fn view<'a>(&'a self) -> iced::Element<'a, Message> {
         let (id, header, page) = self
             .pages
             .get(&self.current_page)
@@ -235,7 +238,7 @@ where
 
             header.view()
         } else {
-            horizontal_space().into()
+            Space::new().width(Length::Fill).into()
         };
 
         self.history
@@ -246,7 +249,7 @@ where
                 let header = if page.settings().is_none_or(|settings| settings.show_header) {
                     header.view()
                 } else {
-                    horizontal_space().into()
+                    Space::new().width(Length::Fill).into()
                 };
 
                 container

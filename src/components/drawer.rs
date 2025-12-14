@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use iced::{
-    widget::{button, column, container, text, vertical_space},
+    widget::{button, column, container, text, Space},
     Alignment, Background, Color, Element, Length, Padding, Theme,
 };
 use iced_font_awesome::fa_icon_solid;
@@ -119,7 +119,7 @@ where
         self.selected_page = selected_page;
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view<'a>(&'a self) -> Element<'a, Message> {
         container(
             column(self.options.iter().map(|(option, page)| {
                 option.view(
@@ -276,7 +276,7 @@ where
     Message: NavigationConvertible<PageMapper = PageMapper> + Clone + 'a,
     PageMapper: DrawerNavigatorMapper<Message = Message> + Eq + Clone + 'a,
 {
-    button(vertical_space())
+    button(Space::new().height(Length::Fill))
         .style(|_, _| button::Style {
             background: Some(Background::Color(Color {
                 r: 0.0,

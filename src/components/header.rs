@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use iced::{
-    widget::{button, container, horizontal_space, text, Row},
+    widget::{button, container, text, Row, Space},
     Alignment, Color, Length, Pixels,
 };
 use iced_font_awesome::fa_icon_solid;
@@ -72,7 +72,7 @@ where
 }
 
 pub trait HeaderTitleElement<Message> {
-    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<Message>;
+    fn view<'a>(&'a self, title: String, settings: &TitleSettings) -> iced::Element<'a, Message>;
 }
 
 pub struct Header<Message> {
@@ -121,7 +121,7 @@ where
         self.title_widget = title;
     }
 
-    fn render_back_button(&self) -> Option<iced::Element<Message>> {
+    fn render_back_button<'a>(&'a self) -> Option<iced::Element<'a, Message>> {
         if !*self.show_left_button.borrow() {
             return None;
         }
@@ -129,16 +129,16 @@ where
         Some(self.back_button.view(&self.settings.button_settings))
     }
 
-    pub fn view(&self) -> iced::Element<Message> {
+    pub fn view<'a>(&'a self) -> iced::Element<'a, Message> {
         container(
             Row::new()
-                .push_maybe(self.render_back_button())
+                .push(self.render_back_button())
                 .push(
                     self.title_widget
                         .view(self.title.clone(), &self.settings.title_settings),
                 )
-                .push(horizontal_space())
-                .push_maybe(
+                .push(Space::new().width(Length::Fill))
+                .push(
                     self.right_button
                         .as_ref()
                         .map(|button| button.view(&self.settings.button_settings)),
@@ -169,7 +169,7 @@ impl Title {
 }
 
 impl<Message> HeaderTitleElement<Message> for Title {
-    fn view(&self, title: String, settings: &TitleSettings) -> iced::Element<Message> {
+    fn view<'a>(&'a self, title: String, settings: &TitleSettings) -> iced::Element<'a, Message> {
         let text_color = settings.title_color;
 
         text(title)
