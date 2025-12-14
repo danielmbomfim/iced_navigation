@@ -12,10 +12,8 @@ authors = ["Daniel M. Bomfim"]
 license = "MIT"
 
 [dependencies]
-iced = { git = "https://github.com/iced-rs/iced", features = ["advanced"] }
-iced_font_awesome = { path = "../iced_font_awesome" }
-wgpu = "=0.20.1"
-zbus = "5.11.0"
+iced = { version = "0.14.0", features = ["advanced"] }
+iced_font_awesome = "0.4.1"
 iced_navigation_derive = { path = "./derive", version = "0.1.1", optional = true }
 indexmap = "2.11.4"
 
