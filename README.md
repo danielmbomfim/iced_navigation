@@ -24,8 +24,8 @@ To use `iced_navigation`, add it to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-iced = "0.13.1"
-iced_navigation = "1.5.0"
+iced = "0.14"
+iced_navigation = "1.6.0"
 ```
 
 ## Usage
@@ -103,13 +103,13 @@ impl App {
         self.nav.update(message)
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         self.nav.view()
     }
 }
 
 fn main() -> iced::Result {
-    iced::application("Example", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }
 ```
 
@@ -119,8 +119,8 @@ To use tab navigation, you must first enable the tabs feature in your Cargo.toml
 
 ```toml
 [dependencies]
-iced = "0.13.1"
-iced_navigation = { version = "1.5.0", features = ["tabs"] }
+iced = "0.14"
+iced_navigation = { version = "1.6.0", features = ["tabs"] }
 ```
 
 ```rust
@@ -187,13 +187,13 @@ impl App {
         self.nav.update(message)
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         self.nav.view()
     }
 }
 
 fn main() -> iced::Result {
-    iced::application("Example", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }
 ```
 
@@ -203,8 +203,8 @@ To use drawer navigation, you must first enable the drawer feature in your Cargo
 
 ```toml
 [dependencies]
-iced = "0.13.1"
-iced_navigation = { version = "1.5.0", features = ["drawer"] }
+iced = "0.14"
+iced_navigation = { version = "1.6.0", features = ["drawer"] }
 ```
 
 ```rust
@@ -279,13 +279,13 @@ impl App {
         self.nav.update(message)
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         self.nav.view()
     }
 }
 
 fn main() -> iced::Result {
-    iced::application("Example", App::update, App::view).run_with(App::new)
+    iced::application(App::new, App::update, App::view).run()
 }
 
 ```
@@ -299,6 +299,3 @@ Contributions are welcome! Feel free to open issues and pull requests.
 ## License
 
 This project is licensed under the MIT License.
-
-
-
