@@ -5,6 +5,7 @@ use std::ops::{Div, Neg};
 
 use iced::Padding;
 use iced::advanced::graphics::core::window;
+use iced::advanced::overlay;
 use iced::advanced::widget::Operation;
 use iced::widget::Id;
 use iced::{
@@ -829,6 +830,130 @@ where
                 }
             }
         }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+        let bounds = layout.bounds();
+
+        let nav_state: &State<Key> = tree.state.downcast_ref();
+        let (main_transition, _base_transition) = nav_state
+            .transition
+            .as_ref()
+            .map(|transition| transition.into_translation(nav_state.frame.as_ref(), &bounds))
+            .unwrap_or((None, None));
+
+        if let Some(mut clipped_viewport) = bounds.intersection(viewport) {
+            let translation = Vector {
+                x: translation.x + main_transition.unwrap_or(0.0),
+                y: translation.y,
+            };
+
+            let children_layout: Vec<_> = layout.children().collect();
+            let children_len = tree.children.len();
+
+            let page_layout = children_layout
+                .last()
+                .unwrap()
+                .children()
+                .collect::<Vec<_>>();
+
+            match self.cache[1].as_mut() {
+                Some(element) => {
+                    let (left_slice, page_slice) = tree.children.split_at_mut(children_len - 1);
+
+                    let header_overlay = self.header_cache[1].as_mut().map(|element| {
+                        let offset = page_layout[0].bounds().height;
+
+                        let overlay = element.as_widget_mut().overlay(
+                            left_slice.last_mut().unwrap(),
+                            page_layout[0],
+                            renderer,
+                            viewport,
+                            translation,
+                        );
+
+                        clipped_viewport.height -= offset;
+                        clipped_viewport.y += offset;
+
+                        overlay
+                    });
+
+                    let page_overlay = element.as_widget_mut().overlay(
+                        &mut page_slice[0],
+                        *page_layout.last().unwrap(),
+                        renderer,
+                        &clipped_viewport,
+                        translation,
+                    );
+
+                    return Some(
+                        overlay::Group::with_children(
+                            header_overlay
+                                .into_iter()
+                                .flatten()
+                                .chain(page_overlay)
+                                .collect(),
+                        )
+                        .overlay(),
+                    );
+                }
+                None => {
+                    let key = nav_state.history.last().unwrap();
+                    let disc = std::mem::discriminant(key);
+
+                    let widget = self.children.get_mut(&disc).unwrap();
+
+                    if let NavigatorPage::Direct(element) = widget {
+                        let (left_slice, page_slice) = tree.children.split_at_mut(children_len - 1);
+
+                        let header_overlay = self.header_cache[1].as_mut().map(|element| {
+                            let offset = page_layout[0].bounds().height;
+
+                            let overlay = element.as_widget_mut().overlay(
+                                left_slice.last_mut().unwrap(),
+                                page_layout[0],
+                                renderer,
+                                &clipped_viewport,
+                                translation,
+                            );
+
+                            clipped_viewport.height -= offset;
+                            clipped_viewport.y += offset;
+
+                            overlay
+                        });
+
+                        let page_overlay = element.as_widget_mut().overlay(
+                            &mut page_slice[0],
+                            *page_layout.last().unwrap(),
+                            renderer,
+                            &clipped_viewport,
+                            translation,
+                        );
+
+                        return Some(
+                            overlay::Group::with_children(
+                                header_overlay
+                                    .into_iter()
+                                    .flatten()
+                                    .chain(page_overlay)
+                                    .collect(),
+                            )
+                            .overlay(),
+                        );
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 
