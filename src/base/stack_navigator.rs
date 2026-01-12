@@ -856,7 +856,6 @@ where
             };
 
             let children_layout: Vec<_> = layout.children().collect();
-            let children_len = tree.children.len();
 
             let page_layout = children_layout
                 .last()
@@ -866,13 +865,13 @@ where
 
             match self.cache[1].as_mut() {
                 Some(element) => {
-                    let (left_slice, page_slice) = tree.children.split_at_mut(children_len - 1);
+                    let (page_state, tree_slice) = tree.children.split_last_mut().unwrap();
 
                     let header_overlay = self.header_cache[1].as_mut().map(|element| {
                         let offset = page_layout[0].bounds().height;
 
                         let overlay = element.as_widget_mut().overlay(
-                            left_slice.last_mut().unwrap(),
+                            tree_slice.last_mut().unwrap(),
                             page_layout[0],
                             renderer,
                             viewport,
@@ -886,7 +885,7 @@ where
                     });
 
                     let page_overlay = element.as_widget_mut().overlay(
-                        &mut page_slice[0],
+                        page_state,
                         *page_layout.last().unwrap(),
                         renderer,
                         &clipped_viewport,
@@ -911,13 +910,13 @@ where
                     let widget = self.children.get_mut(&disc).unwrap();
 
                     if let NavigatorPage::Direct(element) = widget {
-                        let (left_slice, page_slice) = tree.children.split_at_mut(children_len - 1);
+                        let (page_state, tree_slice) = tree.children.split_last_mut().unwrap();
 
                         let header_overlay = self.header_cache[1].as_mut().map(|element| {
                             let offset = page_layout[0].bounds().height;
 
                             let overlay = element.as_widget_mut().overlay(
-                                left_slice.last_mut().unwrap(),
+                                tree_slice.last_mut().unwrap(),
                                 page_layout[0],
                                 renderer,
                                 &clipped_viewport,
@@ -931,7 +930,7 @@ where
                         });
 
                         let page_overlay = element.as_widget_mut().overlay(
-                            &mut page_slice[0],
+                            page_state,
                             *page_layout.last().unwrap(),
                             renderer,
                             &clipped_viewport,
