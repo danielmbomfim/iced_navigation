@@ -850,6 +850,10 @@ where
             .unwrap_or((None, None));
 
         if let Some(mut clipped_viewport) = bounds.intersection(viewport) {
+            if nav_state.pending_update {
+                return None;
+            }
+
             let translation = Vector {
                 x: translation.x + main_transition.unwrap_or(0.0),
                 y: translation.y,
