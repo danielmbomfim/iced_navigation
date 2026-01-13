@@ -3,6 +3,7 @@ use std::mem::Discriminant;
 
 use iced::advanced::graphics::core::window;
 use iced::advanced::layout::Node;
+use iced::advanced::overlay;
 use iced::advanced::widget::Operation;
 use iced::widget::Id;
 use iced::{
@@ -12,7 +13,7 @@ use iced::{
         widget::{Tree, tree},
     },
 };
-use iced::{Padding, Point};
+use iced::{Padding, Point, Vector};
 use indexmap::IndexMap;
 
 use crate::base::{NavigatorPage, NavigatorState};
@@ -538,6 +539,83 @@ where
                 }
             };
         }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+        if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
+            let state = tree.state.downcast_ref::<State<Key>>();
+
+            if state.pending_update {
+                return None;
+            }
+
+            let key = state.history.last().unwrap();
+            let disc = std::mem::discriminant(key);
+            let page_index = self.children.get_index_of(&disc).unwrap();
+            let children_layout: Vec<_> = layout.children().collect();
+
+            let (tabs_cache, cache) = self.cache.split_last_mut().unwrap();
+            let (tabs_state, tree_slice) = if tabs_cache.is_some() {
+                let (tabs_state, slice) = tree.children.split_last_mut().unwrap();
+
+                (Some(tabs_state), slice)
+            } else {
+                (None, tree.children.as_mut_slice())
+            };
+
+            let tabs_overlay = tabs_cache.as_mut().map(|element| {
+                element.as_widget_mut().overlay(
+                    tabs_state.unwrap(),
+                    children_layout[1],
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                )
+            });
+
+            let page_overlay = match cache[0].as_mut() {
+                Some(element) => element.as_widget_mut().overlay(
+                    &mut tree_slice[page_index],
+                    children_layout[0],
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                ),
+                None => {
+                    if let Some(NavigatorPage::Direct(element)) = self.children.get_mut(&disc) {
+                        element.as_widget_mut().overlay(
+                            &mut tree_slice[page_index],
+                            children_layout[0],
+                            renderer,
+                            &clipped_viewport,
+                            translation,
+                        )
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            return Some(
+                overlay::Group::with_children(
+                    tabs_overlay
+                        .into_iter()
+                        .flatten()
+                        .chain(page_overlay)
+                        .collect(),
+                )
+                .overlay(),
+            );
+        }
+
+        None
     }
 }
 
