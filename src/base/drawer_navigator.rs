@@ -4,6 +4,7 @@ use std::mem::Discriminant;
 use std::ops::Div;
 
 use iced::advanced::graphics::core::window;
+use iced::advanced::overlay;
 use iced::advanced::renderer::Quad;
 use iced::advanced::widget::Operation;
 use iced::widget::Id;
@@ -618,7 +619,14 @@ where
             );
         }
 
-        if let Some(child) = self.cache[2].as_mut() {
+        self.cache[2].as_mut().map(|child| {
+            if state.expanded
+                && matches!(self.mode, DrawerMode::Sliding)
+                && !matches!(event, Event::Window(_))
+            {
+                return;
+            }
+
             child.as_widget_mut().update(
                 &mut tree.children[header_index],
                 event,
@@ -629,7 +637,7 @@ where
                 shell,
                 viewport,
             );
-        }
+        });
 
         if let DrawerMode::Sliding = self.mode
             && state.expanded
@@ -1018,6 +1026,151 @@ where
                 }
             }
         }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+        if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
+            let state = tree.state.downcast_ref::<State<Key>>();
+
+            if state.pending_update || state.transition.is_some() {
+                return None;
+            }
+
+            let key = state.history.last().unwrap();
+            let disc = std::mem::discriminant(key);
+
+            let page_index = self.children.get_index_of(&disc).unwrap();
+
+            let (header_layout, drawer_layout, page_layout) = match self.mode {
+                DrawerMode::Fixed
+                    if self.header_element.is_some() && self.drawer_element.is_some() =>
+                {
+                    (
+                        Some(layout.child(0)),
+                        Some(layout.child(1).child(0)),
+                        Some(layout.child(1).child(1)),
+                    )
+                }
+                DrawerMode::Fixed
+                    if self.header_element.is_some() && self.drawer_element.is_none() =>
+                {
+                    (Some(layout.child(0)), None, Some(layout.child(1)))
+                }
+                DrawerMode::Fixed
+                    if self.header_element.is_none() && self.drawer_element.is_some() =>
+                {
+                    (None, Some(layout.child(0)), Some(layout.child(1)))
+                }
+                DrawerMode::Fixed => (None, None, Some(layout)),
+                DrawerMode::Sliding => {
+                    if self.header_element.is_some() && self.drawer_element.is_some() {
+                        (
+                            Some(layout.child(0)),
+                            Some(layout.child(1)),
+                            Some(layout.child(2)),
+                        )
+                    } else if self.header_element.is_some() {
+                        (Some(layout.child(0)), None, Some(layout.child(1)))
+                    } else if self.drawer_element.is_some() {
+                        (None, Some(layout.child(0)), Some(layout.child(1)))
+                    } else {
+                        (None, None, Some(layout.child(0)))
+                    }
+                }
+            };
+
+            let [page_cache, drawer_cache, header_cache] = &mut self.cache;
+
+            let (header_state, tree_slice) = tree.children.split_last_mut().unwrap();
+            let (drawer_state, tree_slice) = tree_slice.split_last_mut().unwrap();
+            let page_state = &mut tree_slice[page_index];
+
+            let header_overlay = header_cache.as_mut().map(|element| {
+                element.as_widget_mut().overlay(
+                    header_state,
+                    header_layout.unwrap(),
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                )
+            });
+
+            let page_overlay = if let Some(element) = page_cache.as_mut() {
+                element.as_widget_mut().overlay(
+                    page_state,
+                    page_layout.unwrap(),
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                )
+            } else {
+                if let Some(NavigatorPage::Direct(element)) = self.children.get_mut(&disc) {
+                    let overlay = element.as_widget_mut().overlay(
+                        page_state,
+                        page_layout.unwrap(),
+                        renderer,
+                        &clipped_viewport,
+                        translation,
+                    );
+
+                    overlay
+                } else {
+                    None
+                }
+            };
+
+            let drawer_overlay = drawer_cache.as_mut().map(|element| {
+                if let DrawerMode::Sliding = self.mode
+                    && !state.expanded
+                    && state.transition.is_none()
+                {
+                    return None;
+                }
+
+                let drawer_layout = drawer_layout.unwrap();
+
+                let drawer_translation = state.transition.as_ref().map(|transition| {
+                    transition
+                        .into_translation(state.frame.as_ref(), &drawer_layout.bounds())
+                        .map(|(value, _)| value)
+                        .unwrap_or(0.0)
+                });
+
+                let translation = Vector {
+                    x: translation.x + drawer_translation.unwrap_or(0.0),
+                    y: translation.y,
+                };
+
+                element.as_widget_mut().overlay(
+                    drawer_state,
+                    drawer_layout,
+                    renderer,
+                    viewport,
+                    translation,
+                )
+            });
+
+            return Some(
+                overlay::Group::with_children(
+                    drawer_overlay
+                        .into_iter()
+                        .chain(header_overlay)
+                        .flatten()
+                        .chain(page_overlay)
+                        .collect(),
+                )
+                .overlay(),
+            );
+        }
+
+        None
     }
 }
 
