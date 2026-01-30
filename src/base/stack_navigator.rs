@@ -165,7 +165,7 @@ where
     pub fn insert_page_with(
         mut self,
         key: Key,
-        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let disc = std::mem::discriminant(&key);
         let item = NavigatorPage::Closure(Box::new(fun));
@@ -177,7 +177,7 @@ where
 
     pub fn header_widget(
         mut self,
-        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let item = NavigatorPage::Closure(Box::new(fun));
 

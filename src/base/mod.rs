@@ -11,7 +11,7 @@ pub mod tabs_navigator;
 #[allow(dead_code)]
 pub(crate) enum NavigatorPage<'a, Params, Message, Theme, Renderer = iced::Renderer> {
     Direct(Element<'a, Message, Theme, Renderer>),
-    Closure(Box<dyn Fn(Params) -> Element<'a, Message, Theme, Renderer>>),
+    Closure(Box<dyn Fn(Params) -> Element<'a, Message, Theme, Renderer> + 'a>),
     None,
 }
 

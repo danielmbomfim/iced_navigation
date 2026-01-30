@@ -140,9 +140,13 @@ where
     height: Length,
     home_page: Key,
     pages: Vec<Key>,
-    header_element: Option<Box<dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer>>>,
+    header_element:
+        Option<Box<dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a>>,
     drawer_element: Option<
-        Box<dyn for<'b> Fn(PageParams<Key>, &'b Vec<Key>) -> Element<'a, Message, Theme, Renderer>>,
+        Box<
+            dyn for<'b> Fn(PageParams<Key>, &'b Vec<Key>) -> Element<'a, Message, Theme, Renderer>
+                + 'a,
+        >,
     >,
     cache: [Option<Element<'a, Message, Theme, Renderer>>; 3],
     children:
@@ -205,7 +209,7 @@ where
     pub fn insert_page_with(
         mut self,
         key: Key,
-        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let disc = std::mem::discriminant(&key);
         let item = NavigatorPage::Closure(Box::new(fun));
@@ -218,7 +222,7 @@ where
 
     pub fn drawer_widget(
         mut self,
-        fun: impl Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+        fun: impl Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         self.drawer_element = Some(Box::new(fun));
 
@@ -227,7 +231,7 @@ where
 
     pub fn header_widget(
         mut self,
-        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'static,
+        fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         self.header_element = Some(Box::new(fun));
 
