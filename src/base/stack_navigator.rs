@@ -241,9 +241,27 @@ where
 
         if state.history_len() + 2 < tree.children.len() {
             tree.children.truncate(state.history_len() + 2);
+            return;
         } else if state.previous_page.is_some() {
             let size = tree.children.len();
+
             tree.children.swap(size - 1, size - 3);
+            tree.children.swap(size - 2, size - 4);
+            return;
+        }
+
+        if state.history_len() + 2 > tree.children.len() {
+            if tree.children.len() == 2 {
+                tree.children.push(Tree::empty());
+                tree.children.push(Tree::empty());
+            } else {
+                tree.children.push(Tree::empty());
+
+                let size = tree.children.len();
+
+                tree.children.swap(size - 2, size - 3);
+                tree.children.swap(size - 4, size - 5);
+            }
         }
     }
 
@@ -259,10 +277,6 @@ where
 
         let mut size = None;
         let state = tree.state.downcast_mut::<State<Key>>();
-
-        if state.history_len() + 2 > tree.children.len() {
-            tree.children.push(Tree::empty());
-        }
 
         let base = if let Some(transition) = state.transition.as_ref()
             && let Some(key) = state.get_previous_key()
@@ -485,6 +499,15 @@ where
 
                     if let Some(previous) = state.previous_page.as_ref() {
                         tree.children.remove(tree.children.len() - 3);
+
+                        if tree.children.len() == 3 {
+                            tree.children.remove(0);
+                        } else {
+                            let len = tree.children.len();
+
+                            tree.children.swap(len - 3, len - 4);
+                        }
+
                         shell.invalidate_layout();
                         shell.request_redraw();
 
