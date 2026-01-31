@@ -240,7 +240,7 @@ where
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
         if state.history_len() + 2 < tree.children.len() {
-            tree.children.truncate(state.history_len());
+            tree.children.truncate(state.history_len() + 2);
         } else if state.previous_page.is_some() {
             let size = tree.children.len();
             tree.children.swap(size - 1, size - 3);
