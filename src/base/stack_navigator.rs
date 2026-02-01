@@ -241,6 +241,10 @@ where
 
         if state.history_len() + 2 < tree.children.len() {
             tree.children.truncate(state.history_len() + 2);
+
+            if tree.children.len() == 3 {
+                tree.children.remove(0);
+            }
             return;
         } else if state.previous_page.is_some() {
             let size = tree.children.len();
@@ -502,7 +506,7 @@ where
 
                         if tree.children.len() == 3 {
                             tree.children.remove(0);
-                        } else {
+                        } else if tree.children.len() > 3 {
                             let len = tree.children.len();
 
                             tree.children.swap(len - 3, len - 4);
