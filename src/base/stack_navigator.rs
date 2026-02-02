@@ -240,12 +240,23 @@ where
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
         if state.history_len() + 2 < tree.children.len() {
-            tree.children.truncate(state.history_len() + 2);
+            let children_len = tree.children.len();
 
-            if tree.children.len() == 3 {
-                tree.children.remove(0);
+            if state.history.len() == 1 {
+                tree.children.truncate(2);
+                return;
             }
-            return;
+
+            if children_len > 4 {
+                tree.children.swap(children_len - 3, children_len - 5);
+                tree.children.remove(children_len - 5);
+                return;
+            }
+
+            if children_len == 3 {
+                tree.children.remove(0);
+                return;
+            }
         } else if state.previous_page.is_some() {
             let size = tree.children.len();
 
