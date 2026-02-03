@@ -40,10 +40,6 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
         self.pending_update = true;
     }
 
-    fn history_len(&self) -> usize {
-        self.history.len()
-    }
-
     fn get_previous_key(&self) -> Option<&Key> {
         if self.previous_page.is_some() {
             return self.previous_page.as_ref();

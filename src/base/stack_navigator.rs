@@ -20,6 +20,15 @@ use iced::{
 use crate::animation::Frame;
 use crate::base::{NavigatorPage, NavigatorState};
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Action {
+    NavigateFoward,
+    NavigateTo(usize),
+    NavigateBack,
+    PopHistory,
+    ClearHistory,
+}
+
 #[derive(Debug, Clone)]
 pub struct State<Key: Eq + Hash> {
     pub(crate) previous_page: Option<Key>,
@@ -27,6 +36,17 @@ pub struct State<Key: Eq + Hash> {
     pub(crate) transition: Option<Transition>,
     pub(crate) frame: Option<Frame>,
     pub(crate) pending_update: bool,
+    pub(crate) current_action: Option<Action>,
+}
+
+impl<Key: 'static + Eq + Hash + Clone> State<Key> {
+    pub(crate) fn push(&mut self, page: Key) {
+        self.history.push(page);
+        self.frame = Some(Frame::new());
+        self.transition = Some(Transition::Foward);
+        self.previous_page = None;
+        self.current_action = Some(Action::NavigateFoward);
+    }
 }
 
 impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
@@ -34,14 +54,6 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
 
     fn request_update(&mut self) {
         self.pending_update = true;
-    }
-
-    fn history_len(&self) -> usize {
-        if self.previous_page.is_some() {
-            self.history.len() + 1
-        } else {
-            self.history.len()
-        }
     }
 
     fn get_previous_key(&self) -> Option<&Key> {
@@ -53,10 +65,29 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
     }
 
     fn navigate(&mut self, page: Key) {
-        self.history.push(page);
-        self.frame = Some(Frame::new());
-        self.transition = Some(Transition::Foward);
-        self.previous_page = None;
+        let disc = std::mem::discriminant(&page);
+
+        let position = self
+            .history
+            .iter()
+            .rposition(|element| std::mem::discriminant(element) == disc);
+
+        match position {
+            Some(index) => {
+                self.previous_page = Some(self.history.remove(self.history.len() - 1));
+                self.history.truncate(index + 1);
+                self.frame = Some(Frame::new());
+                self.transition = Some(Transition::Back);
+                self.current_action = Some(Action::NavigateTo(index));
+            }
+            None => {
+                self.history.push(page);
+                self.frame = Some(Frame::new());
+                self.transition = Some(Transition::Foward);
+                self.previous_page = None;
+                self.current_action = Some(Action::NavigateFoward);
+            }
+        }
     }
 
     fn go_back(&mut self) {
@@ -68,6 +99,7 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
 
         self.frame = Some(Frame::new());
         self.transition = Some(Transition::Back);
+        self.current_action = Some(Action::NavigateBack);
     }
 
     fn clear_history(&mut self) {
@@ -77,6 +109,7 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
         }
 
         self.previous_page = None;
+        self.current_action = Some(Action::ClearHistory);
     }
 
     fn pop_history(&mut self) {
@@ -86,6 +119,7 @@ impl<Key: 'static + Eq + Hash + Clone> NavigatorState for State<Key> {
             self.history.remove(page_number - 2);
             self.previous_page = None;
         }
+        self.current_action = Some(Action::PopHistory);
     }
 }
 
@@ -221,6 +255,7 @@ where
             history: vec![self.home_page.clone()],
             transition: None,
             frame: None,
+            current_action: None,
         })
     }
 
@@ -239,44 +274,51 @@ where
 
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
-        if state.history_len() + 2 < tree.children.len() {
-            let children_len = tree.children.len();
+        if let Some(action) = state.current_action.take() {
+            match action {
+                Action::NavigateFoward => {
+                    if tree.children.len() == 2 {
+                        tree.children.push(Tree::empty());
+                        tree.children.push(Tree::empty());
+                        return;
+                    }
 
-            if state.history.len() == 1 {
-                tree.children.truncate(2);
-                return;
-            }
+                    tree.children.push(Tree::empty());
+                    let size = tree.children.len();
 
-            if children_len > 4 {
-                tree.children.swap(children_len - 3, children_len - 5);
-                tree.children.remove(children_len - 5);
-                return;
-            }
+                    tree.children.swap(size - 2, size - 3);
+                    tree.children.swap(size - 4, size - 5);
+                }
+                Action::NavigateTo(index) => {
+                    let size = tree.children.len();
 
-            if children_len == 3 {
-                tree.children.remove(0);
-                return;
-            }
-        } else if state.previous_page.is_some() {
-            let size = tree.children.len();
+                    tree.children.swap(size - 1, size - 3);
+                    tree.children.swap(size - 2, size - 4);
 
-            tree.children.swap(size - 1, size - 3);
-            tree.children.swap(size - 2, size - 4);
-            return;
-        }
+                    tree.children.swap(size - 1, index);
+                    tree.children.drain(index..(size - 4));
+                }
+                Action::NavigateBack => {
+                    let size = tree.children.len();
 
-        if state.history_len() + 2 > tree.children.len() {
-            if tree.children.len() == 2 {
-                tree.children.push(Tree::empty());
-                tree.children.push(Tree::empty());
-            } else {
-                tree.children.push(Tree::empty());
+                    tree.children.swap(size - 1, size - 3);
+                    tree.children.swap(size - 2, size - 4);
+                }
+                Action::PopHistory => {
+                    let children_len = tree.children.len();
 
-                let size = tree.children.len();
-
-                tree.children.swap(size - 2, size - 3);
-                tree.children.swap(size - 4, size - 5);
-            }
+                    if children_len > 4 {
+                        tree.children.swap(children_len - 3, children_len - 5);
+                        tree.children.remove(children_len - 5);
+                        return;
+                    } else if children_len > 2 {
+                        tree.children.truncate(2);
+                    }
+                }
+                Action::ClearHistory => {
+                    tree.children.truncate(2);
+                }
+            };
         }
     }
 

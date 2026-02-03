@@ -20,8 +20,6 @@ pub(crate) trait NavigatorState {
 
     fn request_update(&mut self);
 
-    fn history_len(&self) -> usize;
-
     fn get_previous_key(&self) -> Option<&Self::Key>;
 
     fn navigate(&mut self, page: Self::Key);

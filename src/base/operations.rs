@@ -317,6 +317,43 @@ where
     }
 }
 
+#[cfg(feature = "stack")]
+fn push_op<T, Key>(page: Key, target: Option<Id>) -> impl Operation<T>
+where
+    Key: 'static + Eq + Hash + Clone + Send,
+{
+    struct Push<Key> {
+        target: Option<Id>,
+        page: Option<Key>,
+    }
+
+    impl<T, Key> Operation<T> for Push<Key>
+    where
+        Key: 'static + Eq + Hash + Clone + Send,
+    {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self)
+        }
+
+        fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
+            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+                value.request_update();
+
+                if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
+                    return;
+                }
+
+                value.push(self.page.take().unwrap());
+            }
+        }
+    }
+
+    Push {
+        target,
+        page: Some(page),
+    }
+}
+
 pub fn navigate<T, P>(page: P) -> Task<T>
 where
     P: 'static + Eq + Hash + Clone + Send,
@@ -415,4 +452,22 @@ where
     T: 'static + Send,
 {
     operate(close_drawer_op::<T, P>(Some(target)))
+}
+
+#[cfg(feature = "stack")]
+pub fn push<T, P>(page: P) -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(push_op::<T, P>(page, None))
+}
+
+#[cfg(feature = "stack")]
+pub fn push_by_id<T, P>(page: P, target: Id) -> Task<T>
+where
+    P: 'static + Eq + Hash + Clone + Send,
+    T: 'static + Send,
+{
+    operate(push_op::<T, P>(page, Some(target)))
 }
