@@ -17,7 +17,7 @@ mod app {
 
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
     pub enum Page {
-        AticlePage,
+        ArticlePage,
         ListPage,
         SettingsPage,
     }
@@ -25,7 +25,7 @@ mod app {
     impl Page {
         fn icon(&self) -> String {
             match self {
-                Self::AticlePage => "newspaper".to_owned(),
+                Self::ArticlePage => "newspaper".to_owned(),
                 Self::ListPage => "list".to_owned(),
                 Self::SettingsPage => "circle-user".to_owned(),
             }
@@ -46,9 +46,9 @@ mod app {
         }
 
         pub fn view<'a>(&'a self) -> Element<'a, Message> {
-            tabs_navigator(Page::AticlePage)
+            tabs_navigator(Page::ArticlePage)
                 .mode(Mode::Bottom)
-                .insert_page(Page::AticlePage, article_page())
+                .insert_page(Page::ArticlePage, article_page())
                 .insert_page(Page::ListPage, list_page())
                 .insert_page(Page::SettingsPage, settings_page())
                 .tabs_widget(tabs)

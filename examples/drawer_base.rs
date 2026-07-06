@@ -18,7 +18,7 @@ mod app {
 
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
     pub enum Page {
-        AticlePage,
+        ArticlePage,
         ListPage,
         SettingsPage,
     }
@@ -26,7 +26,7 @@ mod app {
     impl Page {
         fn title(&self) -> String {
             match self {
-                Self::AticlePage => "Article".to_owned(),
+                Self::ArticlePage => "Article".to_owned(),
                 Self::ListPage => "List".to_owned(),
                 Self::SettingsPage => "Settings".to_owned(),
             }
@@ -48,12 +48,12 @@ mod app {
         }
 
         pub fn view<'a>(&'a self) -> Element<'a, Message> {
-            drawer_navigator(Page::AticlePage)
+            drawer_navigator(Page::ArticlePage)
                 .mode(DrawerMode::Sliding)
                 .header_widget(header)
                 .drawer_widget(drawer)
                 .overlay(true)
-                .insert_page(Page::AticlePage, article_page())
+                .insert_page(Page::ArticlePage, article_page())
                 .insert_page(Page::ListPage, list_page())
                 .insert_page(Page::SettingsPage, settings_page())
                 .into()
