@@ -19,7 +19,15 @@ use iced::{
 use indexmap::IndexMap;
 
 use crate::animation::Frame;
-use crate::base::{NavigatorPage, NavigatorState};
+use crate::base::{NavigatorElement, NavigatorElementSource, NavigatorState};
+
+type HeaderBuilder<'a, Key, Message, Theme, Renderer> =
+    dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;
+
+type DrawerBuilder<'a, Key, Message, Theme, Renderer> =
+    dyn for<'b> Fn(PageParams<Key>, &'b Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;
+
+type OnNavigationEnd<'a, Key, Message> = dyn Fn(Option<Key>, Key) -> Message + 'a;
 
 #[derive(Debug, Clone)]
 pub struct State<Key: Eq + Hash> {
@@ -136,18 +144,15 @@ where
     height: Length,
     home_page: Key,
     pages: Vec<Key>,
-    header_element:
-        Option<Box<dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a>>,
-    drawer_element: Option<
-        Box<
-            dyn for<'b> Fn(PageParams<Key>, &'b Vec<Key>) -> Element<'a, Message, Theme, Renderer>
-                + 'a,
-        >,
+    header_builder: Option<Box<HeaderBuilder<'a, Key, Message, Theme, Renderer>>>,
+    drawer_builder: Option<Box<DrawerBuilder<'a, Key, Message, Theme, Renderer>>>,
+    header_cache: NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
+    drawer_cache: NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
+    children: IndexMap<
+        Discriminant<Key>,
+        NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
     >,
-    cache: [Option<Element<'a, Message, Theme, Renderer>>; 3],
-    children:
-        IndexMap<Discriminant<Key>, NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
-    on_navigation_end: Option<Box<dyn Fn(Option<Key>, Key) -> Message + 'a>>,
+    on_navigation_end: Option<Box<OnNavigationEnd<'a, Key, Message>>>,
     mode: DrawerMode,
     overlay: bool,
 }
@@ -161,11 +166,12 @@ where
             id: None,
             width: Length::Fill,
             height: Length::Fill,
-            header_element: None,
-            drawer_element: None,
+            header_builder: None,
+            drawer_builder: None,
+            drawer_cache: NavigatorElement::empty(),
+            header_cache: NavigatorElement::empty(),
             pages: Vec::new(),
             children: IndexMap::new(),
-            cache: [None, None, None],
             on_navigation_end: None,
             mode: DrawerMode::Sliding,
             overlay: false,
@@ -196,7 +202,7 @@ where
         let disc = std::mem::discriminant(&key);
 
         self.children
-            .insert(disc, NavigatorPage::Direct(page.into()));
+            .insert(disc, NavigatorElementSource::Direct(page.into()).into());
         self.pages.push(key);
 
         self
@@ -208,9 +214,9 @@ where
         fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let disc = std::mem::discriminant(&key);
-        let item = NavigatorPage::Closure(Box::new(fun));
+        let item = NavigatorElementSource::Closure(Box::new(fun));
 
-        self.children.insert(disc, item);
+        self.children.insert(disc, item.into());
         self.pages.push(key);
 
         self
@@ -220,7 +226,7 @@ where
         mut self,
         fun: impl Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
-        self.drawer_element = Some(Box::new(fun));
+        self.drawer_builder = Some(Box::new(fun));
 
         self
     }
@@ -229,7 +235,7 @@ where
         mut self,
         fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
-        self.header_element = Some(Box::new(fun));
+        self.header_builder = Some(Box::new(fun));
 
         self
     }
@@ -316,11 +322,11 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        if tree.children.len() > self.children.len() + 2 {
-            if let Some(item) = tree.children.pop() {
-                tree.children.truncate(self.children.len());
-                tree.children.push(item);
-            }
+        if tree.children.len() > self.children.len() + 2
+            && let Some(item) = tree.children.pop()
+        {
+            tree.children.truncate(self.children.len());
+            tree.children.push(item);
         }
 
         while tree.children.len() < self.children.len() + 2 {
@@ -334,11 +340,17 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = limits.width(self.width).height(self.height);
-        self.cache = [None, None, None];
+        let mut limits = limits.width(self.width).height(self.height);
+
+        if self.header_builder.is_none() {
+            self.header_cache.clear_cache();
+        }
+
+        if self.drawer_builder.is_none() {
+            self.drawer_cache.clear_cache();
+        }
 
         let state = tree.state.downcast_mut::<State<Key>>();
-        let mut items = Vec::with_capacity(2);
 
         let key = state.history.last().unwrap();
         let disc = std::mem::discriminant(key);
@@ -349,168 +361,151 @@ where
         let drawer_index = children_len - 2;
         let page_index = children_len - 3;
 
-        let (page, moved) = {
-            if let Some(NavigatorPage::Closure(builder)) = self.children.get(&disc) {
-                let params = PageParams {
-                    current_page: key.clone(),
-                    can_go_back: state.history.len() > 1,
-                };
-
-                let el = builder(params);
-
-                tree.children[child_index].diff(&el);
-
-                (Some(el), false)
-            } else if let Some(NavigatorPage::Direct(el)) =
-                self.children.insert(disc, NavigatorPage::None)
-            {
-                tree.children[child_index].diff(&el);
-
-                (Some(el), true)
-            } else {
-                (None, false)
-            }
+        let params = PageParams {
+            current_page: key.clone(),
+            can_go_back: state.history.len() > 1,
         };
 
-        if let Some(builder) = self.header_element.as_ref() {
-            let params = PageParams {
-                current_page: key.clone(),
-                can_go_back: state.history.len() > 1,
-            };
+        self.children
+            .get_mut(&disc)
+            .map(|page| {
+                let mut page_header = self.header_builder.as_ref().map(|builder| {
+                    let element = builder(params.clone());
 
-            let el = builder(params);
+                    tree.children[header_index].diff(&element);
 
-            tree.children[header_index].diff(&el);
+                    element
+                });
 
-            items.push(el);
-        }
-
-        if let Some(builder) = self.drawer_element.as_ref() {
-            let params = PageParams {
-                current_page: key.clone(),
-                can_go_back: state.history.len() > 1,
-            };
-
-            let el = builder(params, &self.pages);
-
-            tree.children[drawer_index].diff(&el);
-
-            items.push(el);
-        }
-
-        items.push(page.unwrap());
-
-        tree.children.swap(child_index, page_index);
-        tree.children.swap(drawer_index, page_index);
-
-        let header_node = if self.header_element.is_some() {
-            let node = items[0].as_widget_mut().layout(
-                &mut tree.children[header_index],
-                renderer,
-                &limits,
-            );
-
-            limits.shrink(Size::new(0.0, node.size().height));
-            Some(node)
-        } else {
-            None
-        };
-
-        let node = match self.mode {
-            DrawerMode::Fixed => {
-                let mut base = if self.drawer_element.is_some() {
-                    layout::flex::resolve(
-                        layout::flex::Axis::Horizontal,
+                let header_node = page_header.as_mut().map(|header| {
+                    let node = header.as_widget_mut().layout(
+                        &mut tree.children[header_index],
                         renderer,
                         &limits,
-                        self.width,
-                        self.height,
-                        Padding::ZERO,
-                        0.0,
-                        iced::Alignment::Start,
-                        &mut items[if self.header_element.is_some() { 1 } else { 0 }..],
-                        &mut tree.children[page_index..=drawer_index],
-                    )
-                } else {
-                    items.last_mut().unwrap().as_widget_mut().layout(
-                        &mut tree.children[drawer_index],
-                        renderer,
-                        &limits,
-                    )
-                };
+                    );
 
-                match header_node {
-                    Some(header_node) => {
-                        let base_size = base.size();
-                        base.translate_mut(Vector::new(0.0, header_node.size().height));
+                    limits = limits.shrink(Size::new(0.0, node.size().height));
 
-                        layout::Node::with_children(base_size, [header_node, base].to_vec())
-                    }
-                    None => base,
+                    node
+                });
+
+                let page_drawer = self.drawer_builder.as_ref().map(|builder| {
+                    let element = builder(params.clone(), &self.pages);
+
+                    tree.children[drawer_index].diff(&element);
+
+                    element
+                });
+
+                if page.is_empty() {
+                    page.update_cache(params);
                 }
-            }
-            DrawerMode::Sliding => {
-                let items_len = items.len();
 
-                let drawer_node = if self.drawer_element.is_some() {
-                    Some(items[items_len - 2].as_widget_mut().layout(
-                        &mut tree.children[page_index],
-                        renderer,
-                        &limits,
-                    ))
-                } else {
-                    None
+                let page_element = page.take_element().unwrap();
+
+                tree.children[child_index].diff(&page_element);
+
+                let mut items = Vec::with_capacity(3);
+
+                items.extend(page_header);
+                items.extend(page_drawer);
+                items.push(page_element);
+
+                tree.children.swap(child_index, page_index);
+                tree.children.swap(drawer_index, page_index);
+
+                let node = match self.mode {
+                    DrawerMode::Fixed => {
+                        let mut base = if self.drawer_builder.is_some() {
+                            layout::flex::resolve(
+                                layout::flex::Axis::Horizontal,
+                                renderer,
+                                &limits,
+                                self.width,
+                                self.height,
+                                Padding::ZERO,
+                                0.0,
+                                iced::Alignment::Start,
+                                &mut items[if self.header_builder.is_some() { 1 } else { 0 }..],
+                                &mut tree.children[page_index..=drawer_index],
+                            )
+                        } else {
+                            items.last_mut().unwrap().as_widget_mut().layout(
+                                &mut tree.children[drawer_index],
+                                renderer,
+                                &limits,
+                            )
+                        };
+
+                        match header_node {
+                            Some(header_node) => {
+                                let base_size = base.size();
+                                base.translate_mut(Vector::new(0.0, header_node.size().height));
+
+                                layout::Node::with_children(base_size, [header_node, base].to_vec())
+                            }
+                            None => base,
+                        }
+                    }
+                    DrawerMode::Sliding => {
+                        let items_len = items.len();
+
+                        let drawer_node = if self.drawer_builder.is_some() {
+                            Some(items[items_len - 2].as_widget_mut().layout(
+                                &mut tree.children[page_index],
+                                renderer,
+                                &limits,
+                            ))
+                        } else {
+                            None
+                        };
+
+                        let mut page_node = items[items_len - 1].as_widget_mut().layout(
+                            &mut tree.children[drawer_index],
+                            renderer,
+                            &limits,
+                        );
+
+                        match header_node {
+                            Some(node) => {
+                                let base_size = page_node.size();
+                                page_node.translate_mut(Vector::new(0.0, node.size().height));
+
+                                layout::Node::with_children(
+                                    base_size,
+                                    iter::once(node)
+                                        .chain(drawer_node)
+                                        .chain(iter::once(page_node))
+                                        .collect(),
+                                )
+                            }
+                            None => layout::Node::with_children(
+                                page_node.size(),
+                                iter::empty()
+                                    .chain(drawer_node)
+                                    .chain(iter::once(page_node))
+                                    .collect(),
+                            ),
+                        }
+                    }
                 };
 
-                let mut page_node = items[items_len - 1].as_widget_mut().layout(
-                    &mut tree.children[drawer_index],
-                    renderer,
-                    &limits,
-                );
-
-                match header_node {
-                    Some(node) => {
-                        let base_size = page_node.size();
-                        page_node.translate_mut(Vector::new(0.0, node.size().height));
-
-                        layout::Node::with_children(
-                            base_size,
-                            iter::once(node)
-                                .chain(drawer_node)
-                                .chain(iter::once(page_node))
-                                .collect(),
-                        )
-                    }
-                    None => layout::Node::with_children(
-                        page_node.size(),
-                        iter::empty()
-                            .chain(drawer_node)
-                            .chain(iter::once(page_node))
-                            .collect(),
-                    ),
+                if self.header_builder.is_some() {
+                    self.header_cache.return_element(items.remove(0));
                 }
-            }
-        };
 
-        if self.header_element.is_some() {
-            self.cache[2] = Some(items.remove(0));
-        }
+                if self.drawer_builder.is_some() {
+                    self.drawer_cache.return_element(items.remove(0));
+                }
 
-        if self.drawer_element.is_some() {
-            self.cache[1] = Some(items.remove(0));
-        }
+                page.return_element(items.remove(0));
 
-        if moved {
-            self.children
-                .insert(disc, NavigatorPage::Direct(items.remove(0)));
-        } else {
-            self.cache[0] = Some(items.remove(0));
-        }
+                tree.children.swap(drawer_index, page_index);
+                tree.children.swap(child_index, page_index);
 
-        tree.children.swap(drawer_index, page_index);
-        tree.children.swap(child_index, page_index);
-
-        node
+                node
+            })
+            .unwrap()
     }
 
     fn update(
@@ -569,34 +564,34 @@ where
         let header_index = children_len - 1;
         let drawer_index = children_len - 2;
 
-        let has_drawer = self.drawer_element.is_some()
+        let has_drawer = self.drawer_builder.is_some()
             && (state.expanded || matches!(self.mode, DrawerMode::Fixed));
 
         let (header_layout, drawer_layout, page_layout) = match self.mode {
-            DrawerMode::Fixed if self.header_element.is_some() && self.drawer_element.is_some() => {
+            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_some() => {
                 (
                     Some(layout.child(0)),
                     Some(layout.child(1).child(0)),
                     Some(layout.child(1).child(1)),
                 )
             }
-            DrawerMode::Fixed if self.header_element.is_some() && self.drawer_element.is_none() => {
+            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_none() => {
                 (Some(layout.child(0)), None, Some(layout.child(1)))
             }
-            DrawerMode::Fixed if self.header_element.is_none() && self.drawer_element.is_some() => {
+            DrawerMode::Fixed if self.header_builder.is_none() && self.drawer_builder.is_some() => {
                 (None, Some(layout.child(0)), Some(layout.child(1)))
             }
             DrawerMode::Fixed => (None, None, Some(layout)),
             DrawerMode::Sliding => {
-                if self.header_element.is_some() && self.drawer_element.is_some() {
+                if self.header_builder.is_some() && self.drawer_builder.is_some() {
                     (
                         Some(layout.child(0)),
                         Some(layout.child(1)),
                         Some(layout.child(2)),
                     )
-                } else if self.header_element.is_some() {
+                } else if self.header_builder.is_some() {
                     (Some(layout.child(0)), None, Some(layout.child(1)))
-                } else if self.drawer_element.is_some() {
+                } else if self.drawer_builder.is_some() {
                     (None, Some(layout.child(0)), Some(layout.child(1)))
                 } else {
                     (None, None, Some(layout.child(0)))
@@ -604,7 +599,7 @@ where
             }
         };
 
-        if let Some(child) = self.cache[1].as_mut()
+        if let Some(child) = self.drawer_cache.get_element_mut()
             && has_drawer
         {
             child.as_widget_mut().update(
@@ -619,7 +614,7 @@ where
             );
         }
 
-        self.cache[2].as_mut().map(|child| {
+        if let Some(header) = self.header_cache.get_element_mut() {
             if state.expanded
                 && matches!(self.mode, DrawerMode::Sliding)
                 && !matches!(event, Event::Window(_))
@@ -627,7 +622,7 @@ where
                 return;
             }
 
-            child.as_widget_mut().update(
+            header.as_widget_mut().update(
                 &mut tree.children[header_index],
                 event,
                 header_layout.unwrap(),
@@ -637,7 +632,7 @@ where
                 shell,
                 viewport,
             );
-        });
+        };
 
         if let DrawerMode::Sliding = self.mode
             && state.expanded
@@ -682,34 +677,20 @@ where
             return;
         }
 
-        match self.cache[0].as_mut() {
-            Some(child) => {
-                child.as_widget_mut().update(
-                    &mut tree.children[page_index],
-                    event,
-                    page_layout.unwrap(),
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
-                );
-            }
-            None => {
-                if let Some(NavigatorPage::Direct(child)) = self.children.get_mut(&disc) {
-                    child.as_widget_mut().update(
-                        &mut tree.children[page_index],
-                        event,
-                        page_layout.unwrap(),
-                        cursor,
-                        renderer,
-                        clipboard,
-                        shell,
-                        viewport,
-                    );
-                }
-            }
-        };
+        if let Some(page) = self.children.get_mut(&disc) {
+            let element = page.get_element_mut().unwrap();
+
+            element.as_widget_mut().update(
+                &mut tree.children[page_index],
+                event,
+                page_layout.unwrap(),
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
     }
 
     fn mouse_interaction(
@@ -729,34 +710,34 @@ where
         let header_index = children_len - 1;
         let drawer_index = children_len - 2;
 
-        let has_drawer = self.drawer_element.is_some()
+        let has_drawer = self.drawer_builder.is_some()
             && (state.expanded || matches!(self.mode, DrawerMode::Fixed));
 
         let (header_layout, drawer_layout, page_layout) = match self.mode {
-            DrawerMode::Fixed if self.header_element.is_some() && self.drawer_element.is_some() => {
+            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_some() => {
                 (
                     Some(layout.child(0)),
                     Some(layout.child(1).child(0)),
                     Some(layout.child(1).child(1)),
                 )
             }
-            DrawerMode::Fixed if self.header_element.is_some() && self.drawer_element.is_none() => {
+            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_none() => {
                 (Some(layout.child(0)), None, Some(layout.child(1)))
             }
-            DrawerMode::Fixed if self.header_element.is_none() && self.drawer_element.is_some() => {
+            DrawerMode::Fixed if self.header_builder.is_none() && self.drawer_builder.is_some() => {
                 (None, Some(layout.child(0)), Some(layout.child(1)))
             }
             DrawerMode::Fixed => (None, None, Some(layout)),
             DrawerMode::Sliding => {
-                if self.header_element.is_some() && self.drawer_element.is_some() {
+                if self.header_builder.is_some() && self.drawer_builder.is_some() {
                     (
                         Some(layout.child(0)),
                         Some(layout.child(1)),
                         Some(layout.child(2)),
                     )
-                } else if self.header_element.is_some() {
+                } else if self.header_builder.is_some() {
                     (Some(layout.child(0)), None, Some(layout.child(1)))
-                } else if self.drawer_element.is_some() {
+                } else if self.drawer_builder.is_some() {
                     (None, Some(layout.child(0)), Some(layout.child(1)))
                 } else {
                     (None, None, Some(layout.child(0)))
@@ -764,7 +745,7 @@ where
             }
         };
 
-        let drawer_interaction = if let Some(child) = self.cache[1].as_ref()
+        let drawer_interaction = if let Some(child) = self.drawer_cache.get_element()
             && has_drawer
         {
             let layout = drawer_layout.unwrap();
@@ -792,7 +773,7 @@ where
             return drawer_interaction.unwrap_or_default();
         }
 
-        let header_interaction = if let Some(child) = self.cache[2].as_ref() {
+        let header_interaction = if let Some(child) = self.header_cache.get_element().as_ref() {
             let layout = header_layout.unwrap();
             let interaction = child.as_widget().mouse_interaction(
                 &tree.children[header_index],
@@ -811,30 +792,19 @@ where
             None
         };
 
-        let page_interaction = match self.cache[0].as_ref() {
-            Some(child) => Some(child.as_widget().mouse_interaction(
-                &tree.children[page_index],
-                page_layout.unwrap(),
-                cursor,
-                viewport,
-                renderer,
-            )),
-            None => {
-                if let Some(NavigatorPage::Direct(child)) = self.children.get(&disc) {
-                    Some(child.as_widget().mouse_interaction(
-                        &tree.children[page_index],
-                        page_layout.unwrap(),
-                        cursor,
-                        viewport,
-                        renderer,
-                    ))
-                } else {
-                    None
-                }
-            }
-        };
+        self.children
+            .get(&disc)
+            .map(|page| {
+                let element = page.get_element().unwrap();
 
-        page_interaction
+                element.as_widget().mouse_interaction(
+                    &tree.children[page_index],
+                    page_layout.unwrap(),
+                    cursor,
+                    viewport,
+                    renderer,
+                )
+            })
             .or(header_interaction)
             .or(drawer_interaction)
             .unwrap_or_default()
@@ -862,7 +832,7 @@ where
 
             let (header_layout, drawer_layout, page_layout) = match self.mode {
                 DrawerMode::Fixed
-                    if self.header_element.is_some() && self.drawer_element.is_some() =>
+                    if self.header_builder.is_some() && self.drawer_builder.is_some() =>
                 {
                     (
                         Some(layout.child(0)),
@@ -871,26 +841,26 @@ where
                     )
                 }
                 DrawerMode::Fixed
-                    if self.header_element.is_some() && self.drawer_element.is_none() =>
+                    if self.header_builder.is_some() && self.drawer_builder.is_none() =>
                 {
                     (Some(layout.child(0)), None, Some(layout.child(1)))
                 }
                 DrawerMode::Fixed
-                    if self.header_element.is_none() && self.drawer_element.is_some() =>
+                    if self.header_builder.is_none() && self.drawer_builder.is_some() =>
                 {
                     (None, Some(layout.child(0)), Some(layout.child(1)))
                 }
                 DrawerMode::Fixed => (None, None, Some(layout)),
                 DrawerMode::Sliding => {
-                    if self.header_element.is_some() && self.drawer_element.is_some() {
+                    if self.header_builder.is_some() && self.drawer_builder.is_some() {
                         (
                             Some(layout.child(0)),
                             Some(layout.child(1)),
                             Some(layout.child(2)),
                         )
-                    } else if self.header_element.is_some() {
+                    } else if self.header_builder.is_some() {
                         (Some(layout.child(0)), None, Some(layout.child(1)))
-                    } else if self.drawer_element.is_some() {
+                    } else if self.drawer_builder.is_some() {
                         (None, Some(layout.child(0)), Some(layout.child(1)))
                     } else {
                         (None, None, Some(layout.child(0)))
@@ -898,7 +868,7 @@ where
                 }
             };
 
-            if let Some(child) = self.cache[2].as_ref() {
+            if let Some(child) = self.header_cache.get_element() {
                 child.as_widget().draw(
                     &tree.children[header_index],
                     renderer,
@@ -910,34 +880,21 @@ where
                 );
             }
 
-            match self.cache[0].as_ref() {
-                Some(child) => {
-                    child.as_widget().draw(
-                        &tree.children[page_index],
-                        renderer,
-                        theme,
-                        style,
-                        page_layout.unwrap(),
-                        cursor,
-                        &clipped_viewport,
-                    );
-                }
-                None => {
-                    if let Some(NavigatorPage::Direct(child)) = self.children.get(&disc) {
-                        child.as_widget().draw(
-                            &tree.children[page_index],
-                            renderer,
-                            theme,
-                            style,
-                            page_layout.unwrap(),
-                            cursor,
-                            &clipped_viewport,
-                        );
-                    }
-                }
-            };
+            if let Some(page) = self.children.get(&disc) {
+                let element = page.get_element().unwrap();
 
-            if let Some(child) = self.cache[1].as_ref() {
+                element.as_widget().draw(
+                    &tree.children[page_index],
+                    renderer,
+                    theme,
+                    style,
+                    page_layout.unwrap(),
+                    cursor,
+                    &clipped_viewport,
+                );
+            }
+
+            if let Some(child) = self.drawer_cache.get_element() {
                 match self.mode {
                     DrawerMode::Fixed => {
                         child.as_widget().draw(
@@ -969,7 +926,7 @@ where
                         };
 
                         match state.transition.as_ref().map(|transition| {
-                            transition.into_translation(state.frame.as_ref(), &layout.bounds())
+                            transition.to_translation(state.frame.as_ref(), &layout.bounds())
                         }) {
                             Some(Some((translation, opacity))) => {
                                 if self.overlay {
@@ -1050,7 +1007,7 @@ where
 
             let (header_layout, drawer_layout, page_layout) = match self.mode {
                 DrawerMode::Fixed
-                    if self.header_element.is_some() && self.drawer_element.is_some() =>
+                    if self.header_builder.is_some() && self.drawer_builder.is_some() =>
                 {
                     (
                         Some(layout.child(0)),
@@ -1059,26 +1016,26 @@ where
                     )
                 }
                 DrawerMode::Fixed
-                    if self.header_element.is_some() && self.drawer_element.is_none() =>
+                    if self.header_builder.is_some() && self.drawer_builder.is_none() =>
                 {
                     (Some(layout.child(0)), None, Some(layout.child(1)))
                 }
                 DrawerMode::Fixed
-                    if self.header_element.is_none() && self.drawer_element.is_some() =>
+                    if self.header_builder.is_none() && self.drawer_builder.is_some() =>
                 {
                     (None, Some(layout.child(0)), Some(layout.child(1)))
                 }
                 DrawerMode::Fixed => (None, None, Some(layout)),
                 DrawerMode::Sliding => {
-                    if self.header_element.is_some() && self.drawer_element.is_some() {
+                    if self.header_builder.is_some() && self.drawer_builder.is_some() {
                         (
                             Some(layout.child(0)),
                             Some(layout.child(1)),
                             Some(layout.child(2)),
                         )
-                    } else if self.header_element.is_some() {
+                    } else if self.header_builder.is_some() {
                         (Some(layout.child(0)), None, Some(layout.child(1)))
-                    } else if self.drawer_element.is_some() {
+                    } else if self.drawer_builder.is_some() {
                         (None, Some(layout.child(0)), Some(layout.child(1)))
                     } else {
                         (None, None, Some(layout.child(0)))
@@ -1086,13 +1043,11 @@ where
                 }
             };
 
-            let [page_cache, drawer_cache, header_cache] = &mut self.cache;
-
             let (header_state, tree_slice) = tree.children.split_last_mut().unwrap();
             let (drawer_state, tree_slice) = tree_slice.split_last_mut().unwrap();
             let page_state = &mut tree_slice[page_index];
 
-            let header_overlay = header_cache.as_mut().map(|element| {
+            let header_overlay = self.header_cache.get_element_mut().map(|element| {
                 element.as_widget_mut().overlay(
                     header_state,
                     header_layout.unwrap(),
@@ -1102,31 +1057,7 @@ where
                 )
             });
 
-            let page_overlay = if let Some(element) = page_cache.as_mut() {
-                element.as_widget_mut().overlay(
-                    page_state,
-                    page_layout.unwrap(),
-                    renderer,
-                    &clipped_viewport,
-                    translation,
-                )
-            } else {
-                if let Some(NavigatorPage::Direct(element)) = self.children.get_mut(&disc) {
-                    let overlay = element.as_widget_mut().overlay(
-                        page_state,
-                        page_layout.unwrap(),
-                        renderer,
-                        &clipped_viewport,
-                        translation,
-                    );
-
-                    overlay
-                } else {
-                    None
-                }
-            };
-
-            let drawer_overlay = drawer_cache.as_mut().map(|element| {
+            let drawer_overlay = self.drawer_cache.get_element_mut().map(|element| {
                 if let DrawerMode::Sliding = self.mode
                     && !state.expanded
                     && state.transition.is_none()
@@ -1138,7 +1069,7 @@ where
 
                 let drawer_translation = state.transition.as_ref().map(|transition| {
                     transition
-                        .into_translation(state.frame.as_ref(), &drawer_layout.bounds())
+                        .to_translation(state.frame.as_ref(), &drawer_layout.bounds())
                         .map(|(value, _)| value)
                         .unwrap_or(0.0)
                 });
@@ -1157,7 +1088,17 @@ where
                 )
             });
 
-            return Some(
+            self.children.get_mut(&disc).map(|page| {
+                let element = page.get_element_mut().unwrap();
+
+                let page_overlay = element.as_widget_mut().overlay(
+                    page_state,
+                    page_layout.unwrap(),
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                );
+
                 overlay::Group::with_children(
                     drawer_overlay
                         .into_iter()
@@ -1166,21 +1107,18 @@ where
                         .chain(page_overlay)
                         .collect(),
                 )
-                .overlay(),
-            );
+                .overlay()
+            })
+        } else {
+            None
         }
-
-        None
     }
 }
 
 impl Transition {
-    fn into_translation(&self, frame: Option<&Frame>, area: &Rectangle) -> Option<(f32, f32)> {
+    fn to_translation(&self, frame: Option<&Frame>, area: &Rectangle) -> Option<(f32, f32)> {
         let width = area.width;
-        let frame = match frame {
-            Some(value) => value,
-            None => return None,
-        };
+        let frame = frame?;
 
         match self {
             Self::Expandion => Some((

@@ -16,7 +16,12 @@ use iced::{
 use iced::{Padding, Point, Vector};
 use indexmap::IndexMap;
 
-use crate::base::{NavigatorPage, NavigatorState};
+use crate::base::{NavigatorElement, NavigatorElementSource, NavigatorState};
+
+type TabsBuilderFn<'a, Key, Message, Theme, Renderer> =
+    dyn for<'b> Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;
+
+type OnNavigationEnd<'a, Key, Message> = dyn Fn(Option<Key>, Key) -> Message + 'a;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
@@ -91,16 +96,13 @@ where
     home_page: Key,
     mode: Mode,
     pages: Vec<Key>,
-    tabs_element: Option<
-        Box<
-            dyn for<'b> Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer>
-                + 'a,
-        >,
+    tabs_builder: Option<Box<TabsBuilderFn<'a, Key, Message, Theme, Renderer>>>,
+    tabs_cache: NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
+    children: IndexMap<
+        Discriminant<Key>,
+        NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
     >,
-    cache: [Option<Element<'a, Message, Theme, Renderer>>; 2],
-    children:
-        IndexMap<Discriminant<Key>, NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
-    on_navigation_end: Option<Box<dyn Fn(Option<Key>, Key) -> Message + 'a>>,
+    on_navigation_end: Option<Box<OnNavigationEnd<'a, Key, Message>>>,
 }
 
 impl<'a, Key, Message, Renderer> TabsNavigator<'a, Key, Message, Renderer>
@@ -113,9 +115,9 @@ where
             width: Length::Fill,
             height: Length::Fill,
             mode: Mode::Bottom,
-            tabs_element: None,
+            tabs_builder: None,
             children: IndexMap::new(),
-            cache: [None, None],
+            tabs_cache: NavigatorElement::empty(),
             on_navigation_end: None,
             pages: Vec::new(),
             home_page,
@@ -145,7 +147,7 @@ where
         let disc = std::mem::discriminant(&key);
 
         self.children
-            .insert(disc, NavigatorPage::Direct(page.into()));
+            .insert(disc, NavigatorElementSource::Direct(page.into()).into());
 
         self.pages.push(key);
         self
@@ -157,9 +159,9 @@ where
         fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let disc = std::mem::discriminant(&key);
-        let item = NavigatorPage::Closure(Box::new(fun));
+        let item = NavigatorElementSource::Closure(Box::new(fun));
 
-        self.children.insert(disc, item);
+        self.children.insert(disc, item.into());
         self.pages.push(key);
 
         self
@@ -169,7 +171,7 @@ where
         mut self,
         fun: impl Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
-        self.tabs_element = Some(Box::new(fun));
+        self.tabs_builder = Some(Box::new(fun));
 
         self
     }
@@ -237,11 +239,11 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        if tree.children.len() > self.children.len() + 1 {
-            if let Some(item) = tree.children.pop() {
-                tree.children.truncate(self.children.len());
-                tree.children.push(item);
-            }
+        if tree.children.len() > self.children.len() + 1
+            && let Some(item) = tree.children.pop()
+        {
+            tree.children.truncate(self.children.len());
+            tree.children.push(item);
         }
 
         while tree.children.len() < self.children.len() + 1 {
@@ -258,96 +260,87 @@ where
         let limits = limits.width(self.width).height(self.height);
 
         let state = tree.state.downcast_mut::<State<Key>>();
-        let mut items = Vec::with_capacity(2);
 
+        let children_len = tree.children.len();
         let key = state.history.last().unwrap();
         let disc = std::mem::discriminant(key);
         let page_index = self.children.get_index_of(&disc).unwrap();
-        let children_len = tree.children.len();
+        let children = &mut tree.children;
 
-        let (page, moved) = {
-            if let Some(NavigatorPage::Closure(builder)) = self.children.get(&disc) {
-                let params = PageParams {
-                    current_page: key.clone(),
-                    can_go_back: state.history.len() > 1,
-                };
+        if self.tabs_builder.is_none() {
+            self.tabs_cache.clear_cache();
+        }
 
-                let el = builder(params);
-
-                tree.children[page_index].diff(&el);
-
-                (Some(el), false)
-            } else if let Some(NavigatorPage::Direct(el)) =
-                self.children.insert(disc, NavigatorPage::None)
-            {
-                tree.children[page_index].diff(&el);
-
-                (Some(el), true)
-            } else {
-                (None, false)
-            }
+        let params = PageParams {
+            current_page: key.clone(),
+            can_go_back: state.history.len() > 1,
         };
 
-        items.push(page.unwrap());
+        self.children
+            .get_mut(&disc)
+            .map(|page| {
+                let tabs_element = self.tabs_builder.as_ref().map(|builder| {
+                    let element = builder(params.clone(), &self.pages);
 
-        if let Some(builder) = self.tabs_element.as_ref() {
-            let params = PageParams {
-                current_page: key.clone(),
-                can_go_back: state.history.len() > 1,
-            };
+                    children[children_len - 1].diff(&element);
 
-            let el = builder(params, &self.pages);
+                    element
+                });
 
-            tree.children[children_len - 1].diff(&el);
+                if page.is_empty() {
+                    page.update_cache(params);
+                }
 
-            items.push(el);
-        }
+                let page_element = page.take_element().unwrap();
 
-        tree.children.swap(page_index, children_len - 2);
+                children[page_index].diff(&page_element);
 
-        let mut node = layout::flex::resolve(
-            layout::flex::Axis::Vertical,
-            renderer,
-            &limits,
-            self.width,
-            self.height,
-            Padding::ZERO,
-            0.0,
-            iced::Alignment::Start,
-            &mut items,
-            &mut tree.children[children_len - 2..],
-        );
+                let mut items = Vec::with_capacity(2);
+                items.push(page_element);
+                items.extend(tabs_element);
 
-        if let Mode::Top = self.mode {
-            let mut children = node.children().to_vec();
+                children.swap(page_index, children_len - 2);
 
-            let header_position = Point::new(children[0].bounds().x, children[0].bounds().y);
-            let page_position = Point::new(
-                children[0].bounds().x,
-                children[0].bounds().y + children[1].bounds().height,
-            );
+                let mut node = layout::flex::resolve(
+                    layout::flex::Axis::Vertical,
+                    renderer,
+                    &limits,
+                    self.width,
+                    self.height,
+                    Padding::ZERO,
+                    0.0,
+                    iced::Alignment::Start,
+                    &mut items,
+                    &mut children[children_len - 2..],
+                );
 
-            children[0].move_to_mut(page_position);
-            children[1].move_to_mut(header_position);
+                page.return_element(items.remove(0));
 
-            node = Node::with_children(node.size(), children);
-        }
+                if !items.is_empty() {
+                    self.tabs_cache.return_element(items.remove(0));
+                }
 
-        if moved {
-            self.children
-                .insert(disc, NavigatorPage::Direct(items.remove(0)));
-            self.cache[0] = None;
-        } else {
-            self.cache[0] = Some(items.remove(0));
-        }
+                if let Mode::Top = self.mode {
+                    let mut children = node.children().to_vec();
 
-        if !items.is_empty() {
-            self.cache[1] = Some(items.remove(0));
-        }
+                    let header_position =
+                        Point::new(children[0].bounds().x, children[0].bounds().y);
+                    let page_position = Point::new(
+                        children[0].bounds().x,
+                        children[0].bounds().y + children[1].bounds().height,
+                    );
 
-        tree.children.swap(page_index, children_len - 2);
+                    children[0].move_to_mut(page_position);
+                    children[1].move_to_mut(header_position);
 
-        node
+                    node = Node::with_children(node.size(), children);
+                }
+
+                children.swap(page_index, children_len - 2);
+
+                node
+            })
+            .unwrap()
     }
 
     fn update(
@@ -363,20 +356,20 @@ where
     ) {
         let state = tree.state.downcast_mut::<State<Key>>();
 
-        if let Event::Window(window::Event::RedrawRequested(_)) = event {
-            if state.pending_update {
-                state.pending_update = false;
-                shell.invalidate_layout();
-                shell.request_redraw();
+        if let Event::Window(window::Event::RedrawRequested(_)) = event
+            && state.pending_update
+        {
+            state.pending_update = false;
+            shell.invalidate_layout();
+            shell.request_redraw();
 
-                if let Some(on_navigation_end) = self.on_navigation_end.as_ref() {
-                    shell.publish(on_navigation_end(
-                        state.get_previous_key().cloned(),
-                        state.history.last().cloned().unwrap(),
-                    ));
-                }
-                return;
+            if let Some(on_navigation_end) = self.on_navigation_end.as_ref() {
+                shell.publish(on_navigation_end(
+                    state.get_previous_key().cloned(),
+                    state.history.last().cloned().unwrap(),
+                ));
             }
+            return;
         }
 
         let children_len = tree.children.len();
@@ -385,37 +378,23 @@ where
         let page_index = self.children.get_index_of(&disc).unwrap();
         let children_layout: Vec<_> = layout.children().collect();
 
-        match self.cache[0].as_mut() {
-            Some(child) => {
-                child.as_widget_mut().update(
-                    &mut tree.children[page_index],
-                    event,
-                    children_layout[0],
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
-                );
-            }
-            None => {
-                if let Some(NavigatorPage::Direct(child)) = self.children.get_mut(&disc) {
-                    child.as_widget_mut().update(
-                        &mut tree.children[page_index],
-                        event,
-                        children_layout[0],
-                        cursor,
-                        renderer,
-                        clipboard,
-                        shell,
-                        viewport,
-                    );
-                }
-            }
-        };
+        if let Some(page) = self.children.get_mut(&disc) {
+            let element = page.get_element_mut().unwrap();
 
-        if let Some(child) = self.cache[1].as_mut() {
-            child.as_widget_mut().update(
+            element.as_widget_mut().update(
+                &mut tree.children[page_index],
+                event,
+                children_layout[0],
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
+
+        if let Some(tabs) = self.tabs_cache.get_element_mut() {
+            tabs.as_widget_mut().update(
                 &mut tree.children[children_len - 1],
                 event,
                 children_layout[1],
@@ -443,42 +422,33 @@ where
         let page_index = self.children.get_index_of(&disc).unwrap();
         let children_layout: Vec<_> = layout.children().collect();
 
-        let page_interaction = match self.cache[0].as_ref() {
-            Some(child) => Some(child.as_widget().mouse_interaction(
-                &tree.children[page_index],
-                children_layout[0],
-                cursor,
-                viewport,
-                renderer,
-            )),
-            None => {
-                if let Some(NavigatorPage::Direct(child)) = self.children.get(&disc) {
-                    Some(child.as_widget().mouse_interaction(
-                        &tree.children[page_index],
-                        children_layout[0],
+        let interaction = self
+            .children
+            .get(&disc)
+            .map(|page| {
+                let element = page.get_element().unwrap();
+
+                element.as_widget().mouse_interaction(
+                    &tree.children[page_index],
+                    children_layout[0],
+                    cursor,
+                    viewport,
+                    renderer,
+                )
+            })
+            .or_else(|| {
+                self.tabs_cache.get_element().map(|tabs| {
+                    tabs.as_widget().mouse_interaction(
+                        &tree.children[children_len - 1],
+                        children_layout[1],
                         cursor,
                         viewport,
                         renderer,
-                    ))
-                } else {
-                    None
-                }
-            }
-        };
+                    )
+                })
+            });
 
-        let tabs_interaction = if let Some(child) = self.cache[1].as_ref() {
-            Some(child.as_widget().mouse_interaction(
-                &tree.children[children_len - 1],
-                children_layout[1],
-                cursor,
-                viewport,
-                renderer,
-            ))
-        } else {
-            None
-        };
-
-        page_interaction.or(tabs_interaction).unwrap_or_default()
+        interaction.unwrap_or_default()
     }
 
     fn draw(
@@ -499,8 +469,22 @@ where
             let page_index = self.children.get_index_of(&disc).unwrap();
             let children_layout: Vec<_> = layout.children().collect();
 
-            if let Some(child) = self.cache[1].as_ref() {
-                child.as_widget().draw(
+            if let Some(page) = self.children.get(&disc) {
+                let element = page.get_element().unwrap();
+
+                element.as_widget().draw(
+                    &tree.children[page_index],
+                    renderer,
+                    theme,
+                    style,
+                    children_layout[0],
+                    cursor,
+                    &clipped_viewport,
+                );
+            }
+
+            if let Some(tabs) = self.tabs_cache.get_element() {
+                tabs.as_widget().draw(
                     &tree.children[children_len - 1],
                     renderer,
                     theme,
@@ -510,33 +494,6 @@ where
                     &clipped_viewport,
                 );
             }
-
-            match self.cache[0].as_ref() {
-                Some(child) => {
-                    child.as_widget().draw(
-                        &tree.children[page_index],
-                        renderer,
-                        theme,
-                        style,
-                        children_layout[0],
-                        cursor,
-                        &clipped_viewport,
-                    );
-                }
-                None => {
-                    if let Some(NavigatorPage::Direct(child)) = self.children.get(&disc) {
-                        child.as_widget().draw(
-                            &tree.children[page_index],
-                            renderer,
-                            theme,
-                            style,
-                            children_layout[0],
-                            cursor,
-                            &clipped_viewport,
-                        );
-                    }
-                }
-            };
         }
     }
 
@@ -560,8 +517,7 @@ where
             let page_index = self.children.get_index_of(&disc).unwrap();
             let children_layout: Vec<_> = layout.children().collect();
 
-            let (tabs_cache, cache) = self.cache.split_last_mut().unwrap();
-            let (tabs_state, tree_slice) = if tabs_cache.is_some() {
+            let (tabs_state, tree_slice) = if !self.tabs_cache.is_empty() {
                 let (tabs_state, slice) = tree.children.split_last_mut().unwrap();
 
                 (Some(tabs_state), slice)
@@ -569,8 +525,8 @@ where
                 (None, tree.children.as_mut_slice())
             };
 
-            let tabs_overlay = tabs_cache.as_mut().map(|element| {
-                element.as_widget_mut().overlay(
+            let tabs_overlay = self.tabs_cache.get_element_mut().map(|tabs| {
+                tabs.as_widget_mut().overlay(
                     tabs_state.unwrap(),
                     children_layout[1],
                     renderer,
@@ -579,30 +535,17 @@ where
                 )
             });
 
-            let page_overlay = match cache[0].as_mut() {
-                Some(element) => element.as_widget_mut().overlay(
+            self.children.get_mut(&disc).map(|page| {
+                let element = page.get_element_mut().unwrap();
+
+                let page_overlay = element.as_widget_mut().overlay(
                     &mut tree_slice[page_index],
                     children_layout[0],
                     renderer,
                     &clipped_viewport,
                     translation,
-                ),
-                None => {
-                    if let Some(NavigatorPage::Direct(element)) = self.children.get_mut(&disc) {
-                        element.as_widget_mut().overlay(
-                            &mut tree_slice[page_index],
-                            children_layout[0],
-                            renderer,
-                            &clipped_viewport,
-                            translation,
-                        )
-                    } else {
-                        None
-                    }
-                }
-            };
+                );
 
-            return Some(
                 overlay::Group::with_children(
                     tabs_overlay
                         .into_iter()
@@ -610,11 +553,11 @@ where
                         .chain(page_overlay)
                         .collect(),
                 )
-                .overlay(),
-            );
+                .overlay()
+            })
+        } else {
+            None
         }
-
-        None
     }
 }
 

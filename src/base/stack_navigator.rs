@@ -18,7 +18,12 @@ use iced::{
 };
 
 use crate::animation::Frame;
-use crate::base::{NavigatorPage, NavigatorState};
+use crate::base::{NavigatorElement, NavigatorElementSource, NavigatorState};
+
+type HeaderBuilder<'a, Key, Message, Theme, Renderer> =
+    dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;
+
+type OnNavigationEnd<'a, Key, Message> = dyn Fn(Option<Key>, Key) -> Message + 'a;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Action {
@@ -143,12 +148,12 @@ where
     width: Length,
     height: Length,
     home_page: Key,
-    cache: [Option<Element<'a, Message, Theme, Renderer>>; 2],
-    header_cache: [Option<Element<'a, Message, Theme, Renderer>>; 2],
     children:
-        HashMap<Discriminant<Key>, NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
-    header_element: Option<NavigatorPage<'a, PageParams<Key>, Message, Theme, Renderer>>,
-    on_navigation_end: Option<Box<dyn Fn(Option<Key>, Key) -> Message + 'a>>,
+        HashMap<Discriminant<Key>, NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>>,
+    header_builder: Option<Box<HeaderBuilder<'a, Key, Message, Theme, Renderer>>>,
+    main_header: NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
+    secondary_header: NavigatorElement<'a, PageParams<Key>, Message, Theme, Renderer>,
+    on_navigation_end: Option<Box<OnNavigationEnd<'a, Key, Message>>>,
 }
 
 impl<'a, Key, Message, Renderer> StackNavigator<'a, Key, Message, Renderer>
@@ -161,10 +166,10 @@ where
             width: Length::Fill,
             height: Length::Fill,
             children: HashMap::new(),
-            cache: [None, None],
-            header_cache: [None, None],
+            main_header: NavigatorElement::empty(),
+            secondary_header: NavigatorElement::empty(),
             home_page,
-            header_element: None,
+            header_builder: None,
             on_navigation_end: None,
         }
     }
@@ -192,7 +197,7 @@ where
         let disc = std::mem::discriminant(&key);
 
         self.children
-            .insert(disc, NavigatorPage::Direct(page.into()));
+            .insert(disc, NavigatorElementSource::Direct(page.into()).into());
         self
     }
 
@@ -202,9 +207,9 @@ where
         fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
         let disc = std::mem::discriminant(&key);
-        let item = NavigatorPage::Closure(Box::new(fun));
+        let item = NavigatorElementSource::Closure(Box::new(fun));
 
-        self.children.insert(disc, item);
+        self.children.insert(disc, item.into());
 
         self
     }
@@ -213,9 +218,7 @@ where
         mut self,
         fun: impl Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a,
     ) -> Self {
-        let item = NavigatorPage::Closure(Box::new(fun));
-
-        self.header_element = Some(item);
+        self.header_builder = Some(Box::new(fun));
 
         self
     }
@@ -310,7 +313,6 @@ where
                     if children_len > 4 {
                         tree.children.swap(children_len - 3, children_len - 5);
                         tree.children.remove(children_len - 5);
-                        return;
                     } else if children_len > 2 {
                         tree.children.truncate(2);
                     }
@@ -331,104 +333,79 @@ where
         limits: &layout::Limits,
     ) -> layout::Node {
         let limits = limits.width(self.width).height(self.height);
+        let state = tree.state.downcast_ref::<State<Key>>();
 
-        let mut size = None;
-        let state = tree.state.downcast_mut::<State<Key>>();
+        if self.header_builder.is_none() {
+            self.main_header.clear_cache();
+            self.secondary_header.clear_cache();
+        }
 
-        let base = if let Some(transition) = state.transition.as_ref()
+        let base_layer = if let Some(transition) = state.transition.as_ref()
             && let Some(key) = state.get_previous_key()
         {
             let page_index = tree.children.len() - 3;
             let header_index = tree.children.len() - 4;
 
             let disc = std::mem::discriminant(key);
-            let mut items: Vec<_> = Vec::with_capacity(2);
+            let children = &mut tree.children;
 
-            if let Some(NavigatorPage::Closure(builder)) = self.header_element.as_ref() {
-                let params = PageParams {
-                    page: key.clone(),
-                    can_go_back: match transition {
-                        Transition::Foward => state.history.len() > 2,
-                        Transition::Back => true,
-                    },
-                };
-
-                let el = builder(params);
-
-                tree.children[header_index].diff(&el);
-
-                items.push(el);
-            } else {
-                self.header_cache[0] = None;
+            let params = PageParams {
+                page: key.clone(),
+                can_go_back: match transition {
+                    Transition::Foward => state.history.len() > 2,
+                    Transition::Back => true,
+                },
             };
 
-            let (page, moved) =
-                if let Some(NavigatorPage::Closure(builder)) = self.children.get_mut(&disc) {
-                    let params = PageParams {
-                        page: key.clone(),
-                        can_go_back: match transition {
-                            Transition::Foward => state.history.len() > 2,
-                            Transition::Back => true,
-                        },
-                    };
+            self.children.get_mut(&disc).map(|page| {
+                let page_header = self.header_builder.as_ref().map(|builder| {
+                    let element = builder(params.clone());
 
-                    let el = builder(params);
-                    tree.children[page_index].diff(&el);
+                    children[header_index].diff(&element);
 
-                    (Some(el), false)
-                } else if let Some(NavigatorPage::Direct(el)) =
-                    self.children.insert(disc, NavigatorPage::None)
-                {
-                    tree.children[page_index].diff(&el);
+                    element
+                });
 
-                    (Some(el), true)
-                } else {
-                    (None, false)
-                };
+                if page.is_empty() {
+                    page.update_cache(params);
+                }
 
-            if let Some(page) = page {
-                items.push(page);
-            }
+                let page_element = page.take_element().unwrap();
 
-            let node = layout::flex::resolve(
-                layout::flex::Axis::Vertical,
-                renderer,
-                &limits,
-                self.width,
-                self.height,
-                Padding::ZERO,
-                0.0,
-                iced::Alignment::Start,
-                &mut items,
-                &mut tree.children[if self.header_element.is_some() {
-                    header_index
-                } else {
-                    page_index
-                }..page_index + 1],
-            );
+                children[page_index].diff(&page_element);
 
-            if items.len() > 1 {
-                self.header_cache[0] = Some(items.remove(0));
-            } else {
-                self.header_cache[0] = None;
-            }
+                let LayoutResult {
+                    node,
+                    page: page_element,
+                    header,
+                } = resolve_page_layout(
+                    page_header,
+                    page_element,
+                    header_index,
+                    page_index,
+                    self.width,
+                    self.height,
+                    &limits,
+                    children,
+                    renderer,
+                );
 
-            if moved {
-                self.children
-                    .insert(disc, NavigatorPage::Direct(items.remove(0)));
-                self.cache[0] = None;
-            } else {
-                self.cache[0] = Some(items.remove(0));
-            }
+                if let Some(header) = header {
+                    self.secondary_header.return_element(header);
+                }
 
-            Some(node)
+                page.return_element(page_element);
+
+                node
+            })
         } else {
-            self.cache[0] = None;
             None
         };
 
-        let main_page = {
-            let limits = if let Some(value) = &base {
+        let mut size = None;
+
+        let main_layer = {
+            let limits = if let Some(value) = &base_layer {
                 size = Some(limits.resolve(self.width, self.height, value.size()));
                 layout::Limits::new(Size::ZERO, size.unwrap())
             } else {
@@ -440,92 +417,67 @@ where
 
             let key = state.history.last().unwrap();
             let disc = std::mem::discriminant(key);
-            let mut items: Vec<_> = Vec::with_capacity(2);
+            let children = &mut tree.children;
 
-            if let Some(NavigatorPage::Closure(builder)) = self.header_element.as_ref() {
-                let params = PageParams {
-                    page: key.clone(),
-                    can_go_back: state.history.len() > 1,
-                };
-
-                let el = builder(params);
-
-                tree.children[header_index].diff(&el);
-
-                items.push(el);
-            } else {
-                self.header_cache[1] = None;
+            let params = PageParams {
+                page: key.clone(),
+                can_go_back: state.history.len() > 1,
             };
 
-            let (page, moved) =
-                if let Some(NavigatorPage::Closure(builder)) = self.children.get_mut(&disc) {
-                    let params = PageParams {
-                        page: key.clone(),
-                        can_go_back: state.history.len() > 1,
-                    };
+            self.children
+                .get_mut(&disc)
+                .map(|page| {
+                    let page_header = self.header_builder.as_ref().map(|builder| {
+                        let element = builder(params.clone());
 
-                    let el = builder(params);
-                    tree.children[page_index].diff(&el);
+                        children[header_index].diff(&element);
 
-                    (Some(el), false)
-                } else if let Some(NavigatorPage::Direct(el)) =
-                    self.children.insert(disc, NavigatorPage::None)
-                {
-                    tree.children[page_index].diff(&el);
+                        element
+                    });
 
-                    (Some(el), true)
-                } else {
-                    (None, false)
-                };
+                    if page.is_empty() {
+                        page.update_cache(params);
+                    }
 
-            if let Some(page) = page {
-                items.push(page);
-            }
+                    let page_element = page.take_element().unwrap();
 
-            let node = layout::flex::resolve(
-                layout::flex::Axis::Vertical,
-                renderer,
-                &limits,
-                self.width,
-                self.height,
-                Padding::ZERO,
-                0.0,
-                iced::Alignment::Start,
-                &mut items,
-                &mut tree.children[if self.header_element.is_some() {
-                    header_index
-                } else {
-                    page_index
-                }..page_index + 1],
-            );
+                    children[page_index].diff(&page_element);
 
-            if items.len() > 1 {
-                self.header_cache[1] = Some(items.remove(0));
-            } else {
-                self.header_cache[1] = None;
-            }
+                    let LayoutResult {
+                        node,
+                        page: page_element,
+                        header,
+                    } = resolve_page_layout(
+                        page_header,
+                        page_element,
+                        header_index,
+                        page_index,
+                        self.width,
+                        self.height,
+                        &limits,
+                        children,
+                        renderer,
+                    );
 
-            if moved {
-                self.children
-                    .insert(disc, NavigatorPage::Direct(items.remove(0)));
-                self.cache[1] = None;
-            } else {
-                self.cache[1] = Some(items.remove(0));
-            }
+                    if let Some(header) = header {
+                        self.main_header.return_element(header);
+                    }
 
-            node
+                    page.return_element(page_element);
+
+                    node
+                })
+                .unwrap()
         };
 
         let mut nodes = Vec::with_capacity(2);
+        nodes.extend(base_layer);
+        nodes.push(main_layer);
 
-        if let Some(node) = base {
-            nodes.push(node);
-        } else {
-            size = Some(limits.resolve(self.width, self.height, main_page.size()));
-        }
-
-        nodes.push(main_page);
-        layout::Node::with_children(size.unwrap(), nodes)
+        layout::Node::with_children(
+            size.unwrap_or_else(|| limits.resolve(self.width, self.height, nodes[0].size())),
+            nodes,
+        )
     }
 
     fn update(
@@ -595,7 +547,7 @@ where
 
         let layout = layout.children().last().unwrap();
 
-        if let Some(header) = self.header_cache[1].as_mut() {
+        if let Some(header) = self.main_header.get_element_mut() {
             let header_index = tree.children.len() - 2;
 
             header.as_widget_mut().update(
@@ -610,43 +562,24 @@ where
             );
         }
 
-        if let Some(value) = self.cache.last_mut() {
+        let key = state.history.last().unwrap();
+        let disc = std::mem::discriminant(key);
+
+        if let Some(page) = self.children.get_mut(&disc) {
+            let element = page.get_element_mut().unwrap();
             let widget_state = tree.children.last_mut().unwrap();
 
-            match value {
-                Some(element) => {
-                    element.as_widget_mut().update(
-                        widget_state,
-                        event,
-                        layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
-                        cursor,
-                        renderer,
-                        clipboard,
-                        shell,
-                        viewport,
-                    );
-                }
-                None => {
-                    let key = state.history.last().unwrap();
-                    let disc = std::mem::discriminant(key);
-
-                    let widget = self.children.get_mut(&disc).unwrap();
-
-                    if let NavigatorPage::Direct(element) = widget {
-                        element.as_widget_mut().update(
-                            widget_state,
-                            event,
-                            layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
-                            cursor,
-                            renderer,
-                            clipboard,
-                            shell,
-                            viewport,
-                        );
-                    }
-                }
-            }
-        };
+            element.as_widget_mut().update(
+                widget_state,
+                event,
+                layout.child(if self.main_header.is_empty() { 0 } else { 1 }),
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
     }
 
     fn mouse_interaction(
@@ -670,44 +603,34 @@ where
 
         let layout = layout.children().last().unwrap();
 
-        let header_interaction = if let Some(header) = self.header_cache[1].as_ref() {
-            Some(header.as_widget().mouse_interaction(
+        let header_interaction = self.main_header.get_element().map(|header| {
+            header.as_widget().mouse_interaction(
                 header_state,
                 layout.child(0),
                 cursor,
                 viewport,
                 renderer,
-            ))
-        } else {
-            None
-        };
+            )
+        });
 
-        header_interaction.unwrap_or_else(|| match self.cache[1].as_ref() {
-            Some(element) => element.as_widget().mouse_interaction(
-                page_state,
-                layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
-                cursor,
-                viewport,
-                renderer,
-            ),
-            None => {
-                let key = state.history.last().unwrap();
-                let disc = std::mem::discriminant(key);
+        header_interaction.unwrap_or_else(|| {
+            let key = state.history.last().unwrap();
+            let disc = std::mem::discriminant(key);
 
-                let widget = self.children.get(&disc).unwrap();
+            self.children
+                .get(&disc)
+                .map(|page| {
+                    let element = page.get_element().unwrap();
 
-                if let NavigatorPage::Direct(element) = widget {
                     element.as_widget().mouse_interaction(
                         page_state,
-                        layout.child(if self.header_cache[1].is_some() { 1 } else { 0 }),
+                        layout.child(if self.main_header.is_empty() { 0 } else { 1 }),
                         cursor,
                         viewport,
                         renderer,
                     )
-                } else {
-                    mouse::Interaction::default()
-                }
-            }
+                })
+                .unwrap_or_default()
         })
     }
 
@@ -735,93 +658,54 @@ where
             let (main_transition, base_transition) = nav_state
                 .transition
                 .as_ref()
-                .map(|transition| transition.into_translation(nav_state.frame.as_ref(), &bounds))
+                .map(|transition| transition.to_translation(nav_state.frame.as_ref(), &bounds))
                 .unwrap_or((None, None));
 
             if nav_state.transition.is_some()
-                && let Some(value) = self.cache.get(0)
                 && let Some(key) = nav_state.get_previous_key()
             {
-                let mut clipped_viewport = clipped_viewport.clone();
+                let mut clipped_viewport = clipped_viewport;
                 let page_state = tree.children.get(children_len - 3).unwrap();
                 let page_layout = children_layout[0].children().collect::<Vec<_>>();
 
-                match value {
-                    Some(element) => {
-                        if let Some(element) = self.header_cache[0].as_ref() {
-                            let header_state = tree.children.get(children_len - 4).unwrap();
+                let disc = std::mem::discriminant(key);
 
-                            let offset = page_layout[0].bounds().height;
+                if let Some(page) = self.children.get(&disc) {
+                    let element = page.get_element().unwrap();
 
-                            draw_layer(
-                                base_transition,
-                                element,
-                                header_state,
-                                renderer,
-                                theme,
-                                style,
-                                page_layout[0],
-                                cursor,
-                                &clipped_viewport,
-                            );
+                    if let Some(element) = self.secondary_header.get_element() {
+                        let header_state = tree.children.get(children_len - 4).unwrap();
 
-                            clipped_viewport.height -= offset;
-                            clipped_viewport.y += offset;
-                        }
+                        let offset = page_layout[0].bounds().height;
 
                         draw_layer(
                             base_transition,
                             element,
-                            &page_state,
+                            header_state,
                             renderer,
                             theme,
                             style,
-                            *page_layout.last().unwrap(),
+                            page_layout[0],
                             cursor,
                             &clipped_viewport,
                         );
+
+                        clipped_viewport.height -= offset;
+                        clipped_viewport.y += offset;
                     }
-                    None => {
-                        let disc = std::mem::discriminant(key);
 
-                        let widget = self.children.get(&disc).unwrap();
-
-                        if let NavigatorPage::Direct(element) = widget {
-                            if let Some(element) = self.header_cache[0].as_ref() {
-                                let header_state = tree.children.get(children_len - 4).unwrap();
-
-                                let offset = page_layout[0].bounds().height;
-
-                                draw_layer(
-                                    base_transition,
-                                    element,
-                                    header_state,
-                                    renderer,
-                                    theme,
-                                    style,
-                                    page_layout[0],
-                                    cursor,
-                                    &clipped_viewport,
-                                );
-
-                                clipped_viewport.height -= offset;
-                                clipped_viewport.y += offset;
-                            }
-
-                            draw_layer(
-                                base_transition,
-                                element,
-                                &page_state,
-                                renderer,
-                                theme,
-                                style,
-                                *page_layout.last().unwrap(),
-                                cursor,
-                                &clipped_viewport,
-                            );
-                        }
-                    }
-                };
+                    draw_layer(
+                        base_transition,
+                        element,
+                        page_state,
+                        renderer,
+                        theme,
+                        style,
+                        *page_layout.last().unwrap(),
+                        cursor,
+                        &clipped_viewport,
+                    );
+                }
             }
 
             let page_state = tree.children.get(children_len - 1).unwrap();
@@ -831,11 +715,15 @@ where
                 .children()
                 .collect::<Vec<_>>();
 
-            match self.cache[1].as_ref() {
-                Some(element) => renderer.with_layer(clipped_viewport, |renderer| {
-                    if let Some(element) = self.header_cache[1].as_ref() {
-                        let header_state = tree.children.get(children_len - 2).unwrap();
+            let key = nav_state.history.last().unwrap();
+            let disc = std::mem::discriminant(key);
 
+            if let Some(page) = self.children.get(&disc) {
+                let element = page.get_element().unwrap();
+
+                renderer.with_layer(clipped_viewport, |renderer| {
+                    if let Some(element) = self.main_header.get_element() {
+                        let header_state = tree.children.get(children_len - 2).unwrap();
                         let offset = page_layout[0].bounds().height;
 
                         draw_layer(
@@ -865,49 +753,7 @@ where
                         cursor,
                         &clipped_viewport,
                     );
-                }),
-                None => {
-                    let key = nav_state.history.last().unwrap();
-                    let disc = std::mem::discriminant(key);
-
-                    let widget = self.children.get(&disc).unwrap();
-
-                    if let NavigatorPage::Direct(element) = widget {
-                        renderer.with_layer(clipped_viewport, |renderer| {
-                            if let Some(element) = self.header_cache[1].as_ref() {
-                                let header_state = tree.children.get(children_len - 2).unwrap();
-                                let offset = page_layout[0].bounds().height;
-
-                                draw_layer(
-                                    main_transition,
-                                    element,
-                                    header_state,
-                                    renderer,
-                                    theme,
-                                    style,
-                                    page_layout[0],
-                                    cursor,
-                                    &clipped_viewport,
-                                );
-
-                                clipped_viewport.height -= offset;
-                                clipped_viewport.y += offset;
-                            }
-
-                            draw_layer(
-                                main_transition,
-                                element,
-                                page_state,
-                                renderer,
-                                theme,
-                                style,
-                                *page_layout.last().unwrap(),
-                                cursor,
-                                &clipped_viewport,
-                            );
-                        });
-                    }
-                }
+                });
             }
         }
     }
@@ -926,7 +772,7 @@ where
         let (main_transition, _base_transition) = nav_state
             .transition
             .as_ref()
-            .map(|transition| transition.into_translation(nav_state.frame.as_ref(), &bounds))
+            .map(|transition| transition.to_translation(nav_state.frame.as_ref(), &bounds))
             .unwrap_or((None, None));
 
         if let Some(mut clipped_viewport) = bounds.intersection(viewport) {
@@ -947,93 +793,48 @@ where
                 .children()
                 .collect::<Vec<_>>();
 
-            match self.cache[1].as_mut() {
-                Some(element) => {
-                    let (page_state, tree_slice) = tree.children.split_last_mut().unwrap();
+            let key = nav_state.history.last().unwrap();
+            let disc = std::mem::discriminant(key);
 
-                    let header_overlay = self.header_cache[1].as_mut().map(|element| {
-                        let offset = page_layout[0].bounds().height;
+            return self.children.get_mut(&disc).map(|page| {
+                let element = page.get_element_mut().unwrap();
 
-                        let overlay = element.as_widget_mut().overlay(
-                            tree_slice.last_mut().unwrap(),
-                            page_layout[0],
-                            renderer,
-                            viewport,
-                            translation,
-                        );
+                let (page_state, tree_slice) = tree.children.split_last_mut().unwrap();
 
-                        clipped_viewport.height -= offset;
-                        clipped_viewport.y += offset;
+                let header_overlay = self.main_header.get_element_mut().map(|element| {
+                    let offset = page_layout[0].bounds().height;
 
-                        overlay
-                    });
-
-                    let page_overlay = element.as_widget_mut().overlay(
-                        page_state,
-                        *page_layout.last().unwrap(),
+                    let overlay = element.as_widget_mut().overlay(
+                        tree_slice.last_mut().unwrap(),
+                        page_layout[0],
                         renderer,
                         &clipped_viewport,
                         translation,
                     );
 
-                    return Some(
-                        overlay::Group::with_children(
-                            header_overlay
-                                .into_iter()
-                                .flatten()
-                                .chain(page_overlay)
-                                .collect(),
-                        )
-                        .overlay(),
-                    );
-                }
-                None => {
-                    let key = nav_state.history.last().unwrap();
-                    let disc = std::mem::discriminant(key);
+                    clipped_viewport.height -= offset;
+                    clipped_viewport.y += offset;
 
-                    let widget = self.children.get_mut(&disc).unwrap();
+                    overlay
+                });
 
-                    if let NavigatorPage::Direct(element) = widget {
-                        let (page_state, tree_slice) = tree.children.split_last_mut().unwrap();
+                let page_overlay = element.as_widget_mut().overlay(
+                    page_state,
+                    *page_layout.last().unwrap(),
+                    renderer,
+                    &clipped_viewport,
+                    translation,
+                );
 
-                        let header_overlay = self.header_cache[1].as_mut().map(|element| {
-                            let offset = page_layout[0].bounds().height;
-
-                            let overlay = element.as_widget_mut().overlay(
-                                tree_slice.last_mut().unwrap(),
-                                page_layout[0],
-                                renderer,
-                                &clipped_viewport,
-                                translation,
-                            );
-
-                            clipped_viewport.height -= offset;
-                            clipped_viewport.y += offset;
-
-                            overlay
-                        });
-
-                        let page_overlay = element.as_widget_mut().overlay(
-                            page_state,
-                            *page_layout.last().unwrap(),
-                            renderer,
-                            &clipped_viewport,
-                            translation,
-                        );
-
-                        return Some(
-                            overlay::Group::with_children(
-                                header_overlay
-                                    .into_iter()
-                                    .flatten()
-                                    .chain(page_overlay)
-                                    .collect(),
-                            )
-                            .overlay(),
-                        );
-                    }
-                }
-            }
+                overlay::Group::with_children(
+                    header_overlay
+                        .into_iter()
+                        .flatten()
+                        .chain(page_overlay)
+                        .collect(),
+                )
+                .overlay()
+            });
         }
 
         None
@@ -1061,19 +862,19 @@ fn draw_layer<'a, Message, Renderer>(
             draw_background(renderer, &background_style, *viewport);
             layer
                 .as_widget()
-                .draw(tree, renderer, theme, style, layout, cursor, &viewport)
+                .draw(tree, renderer, theme, style, layout, cursor, viewport)
         }),
         None => {
             draw_background(renderer, &background_style, *viewport);
             layer
                 .as_widget()
-                .draw(tree, renderer, theme, style, layout, cursor, &viewport);
+                .draw(tree, renderer, theme, style, layout, cursor, viewport);
         }
     };
 }
 
 impl Transition {
-    fn into_translation(
+    fn to_translation(
         &self,
         frame: Option<&Frame>,
         area: &Rectangle,
@@ -1110,6 +911,59 @@ where
 {
     fn from(stack: StackNavigator<'a, Key, Message, Renderer>) -> Self {
         Self::new(stack)
+    }
+}
+
+struct LayoutResult<'a, Message, Theme, Renderer> {
+    node: layout::Node,
+    header: Option<Element<'a, Message, Theme, Renderer>>,
+    page: Element<'a, Message, Theme, Renderer>,
+}
+
+fn resolve_page_layout<'a, Message, Theme, Renderer>(
+    header: Option<Element<'a, Message, Theme, Renderer>>,
+    page: Element<'a, Message, Theme, Renderer>,
+    header_index: usize,
+    page_index: usize,
+    width: Length,
+    height: Length,
+    limits: &layout::Limits,
+    children: &mut [Tree],
+    renderer: &Renderer,
+) -> LayoutResult<'a, Message, Theme, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    let mut elements = Vec::with_capacity(2);
+
+    if let Some(header) = header {
+        elements.push(header);
+    }
+
+    elements.push(page);
+    let size = elements.len();
+
+    let node = layout::flex::resolve(
+        layout::flex::Axis::Vertical,
+        renderer,
+        limits,
+        width,
+        height,
+        Padding::ZERO,
+        0.0,
+        iced::Alignment::Start,
+        &mut elements,
+        &mut children[if size == 2 { header_index } else { page_index }..page_index + 1],
+    );
+
+    LayoutResult {
+        node,
+        header: if size == 2 {
+            Some(elements.remove(0))
+        } else {
+            None
+        },
+        page: elements.remove(0),
     }
 }
 
