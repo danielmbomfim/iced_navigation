@@ -230,10 +230,37 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
-        _renderer: &Renderer,
+        renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         let state = tree.state.downcast_mut::<State<Key>>();
+        let children_len = tree.children.len();
+        let key = state.history.last().unwrap();
+        let disc = std::mem::discriminant(key);
+        let page_index = self.children.get_index_of(&disc).unwrap();
+        let children_layout: Vec<_> = layout.children().collect();
+
+        if let Some(tabs) = self.tabs_cache.get_element_mut() {
+            operation.traverse(&mut |operation| {
+                tabs.as_widget_mut().operate(
+                    &mut tree.children[children_len - 1],
+                    children_layout[1],
+                    renderer,
+                    operation,
+                );
+            });
+        }
+
+        if let Some(page) = self.children.get_mut(&disc) {
+            operation.traverse(&mut |operation| {
+                page.get_element_mut().unwrap().as_widget_mut().operate(
+                    &mut tree.children[page_index],
+                    children_layout[0],
+                    renderer,
+                    operation,
+                );
+            });
+        }
 
         operation.custom(self.id.as_ref(), layout.bounds(), state);
     }

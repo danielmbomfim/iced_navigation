@@ -306,10 +306,60 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
-        _renderer: &Renderer,
+        renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         let state = tree.state.downcast_mut::<State<Key>>();
+
+        let children_len = tree.children.len();
+        let key = state.history.last().unwrap();
+        let disc = std::mem::discriminant(key);
+
+        let page_index = self.children.get_index_of(&disc).unwrap();
+        let header_index = children_len - 1;
+        let drawer_index = children_len - 2;
+
+        let (header_layout, drawer_layout, page_layout) = get_layout(
+            layout,
+            self.mode,
+            !self.header_cache.is_empty(),
+            !self.drawer_cache.is_empty(),
+        );
+
+        if let Some(header) = self.header_cache.get_element_mut() {
+            operation.traverse(&mut |operation| {
+                header.as_widget_mut().operate(
+                    &mut tree.children[header_index],
+                    header_layout.unwrap(),
+                    renderer,
+                    operation,
+                );
+            });
+        }
+
+        if let Some(drawer) = self.drawer_cache.get_element_mut() {
+            operation.traverse(&mut |operation| {
+                drawer.as_widget_mut().operate(
+                    &mut tree.children[drawer_index],
+                    drawer_layout.unwrap(),
+                    renderer,
+                    operation,
+                );
+            });
+        }
+
+        if let Some(page) = self.children.get_mut(&disc) {
+            let element = page.get_element_mut().unwrap();
+
+            operation.traverse(&mut |operation| {
+                element.as_widget_mut().operate(
+                    &mut tree.children[page_index],
+                    page_layout.unwrap(),
+                    renderer,
+                    operation,
+                );
+            });
+        }
 
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
@@ -340,7 +390,7 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let mut limits = limits.width(self.width).height(self.height);
+        let limits = limits.width(self.width).height(self.height);
 
         if self.header_builder.is_none() {
             self.header_cache.clear_cache();
@@ -383,8 +433,6 @@ where
                         renderer,
                         &limits,
                     );
-
-                    limits = limits.shrink(Size::new(0.0, node.size().height));
 
                     node
                 });
@@ -567,37 +615,8 @@ where
         let has_drawer = self.drawer_builder.is_some()
             && (state.expanded || matches!(self.mode, DrawerMode::Fixed));
 
-        let (header_layout, drawer_layout, page_layout) = match self.mode {
-            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_some() => {
-                (
-                    Some(layout.child(0)),
-                    Some(layout.child(1).child(0)),
-                    Some(layout.child(1).child(1)),
-                )
-            }
-            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_none() => {
-                (Some(layout.child(0)), None, Some(layout.child(1)))
-            }
-            DrawerMode::Fixed if self.header_builder.is_none() && self.drawer_builder.is_some() => {
-                (None, Some(layout.child(0)), Some(layout.child(1)))
-            }
-            DrawerMode::Fixed => (None, None, Some(layout)),
-            DrawerMode::Sliding => {
-                if self.header_builder.is_some() && self.drawer_builder.is_some() {
-                    (
-                        Some(layout.child(0)),
-                        Some(layout.child(1)),
-                        Some(layout.child(2)),
-                    )
-                } else if self.header_builder.is_some() {
-                    (Some(layout.child(0)), None, Some(layout.child(1)))
-                } else if self.drawer_builder.is_some() {
-                    (None, Some(layout.child(0)), Some(layout.child(1)))
-                } else {
-                    (None, None, Some(layout.child(0)))
-                }
-            }
-        };
+        let (header_layout, drawer_layout, page_layout) =
+            get_layout(layout, self.mode, !self.header_cache.is_empty(), has_drawer);
 
         if let Some(child) = self.drawer_cache.get_element_mut()
             && has_drawer
@@ -614,14 +633,11 @@ where
             );
         }
 
-        if let Some(header) = self.header_cache.get_element_mut() {
-            if state.expanded
-                && matches!(self.mode, DrawerMode::Sliding)
-                && !matches!(event, Event::Window(_))
-            {
-                return;
-            }
-
+        if let Some(header) = self.header_cache.get_element_mut()
+            && (!state.expanded
+                || !matches!(self.mode, DrawerMode::Sliding)
+                || matches!(event, Event::Window(_)))
+        {
             header.as_widget_mut().update(
                 &mut tree.children[header_index],
                 event,
@@ -637,11 +653,10 @@ where
         if let DrawerMode::Sliding = self.mode
             && state.expanded
         {
-            let mut bounds = page_layout.unwrap().bounds();
-
-            if let Some(header) = header_layout {
-                bounds = bounds.union(&header.bounds());
-            }
+            let page_bounds = page_layout.unwrap().bounds();
+            let bounds = header_layout
+                .map(|header| page_bounds.union(&header.bounds()))
+                .unwrap_or(page_bounds);
 
             match event {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -713,37 +728,12 @@ where
         let has_drawer = self.drawer_builder.is_some()
             && (state.expanded || matches!(self.mode, DrawerMode::Fixed));
 
-        let (header_layout, drawer_layout, page_layout) = match self.mode {
-            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_some() => {
-                (
-                    Some(layout.child(0)),
-                    Some(layout.child(1).child(0)),
-                    Some(layout.child(1).child(1)),
-                )
-            }
-            DrawerMode::Fixed if self.header_builder.is_some() && self.drawer_builder.is_none() => {
-                (Some(layout.child(0)), None, Some(layout.child(1)))
-            }
-            DrawerMode::Fixed if self.header_builder.is_none() && self.drawer_builder.is_some() => {
-                (None, Some(layout.child(0)), Some(layout.child(1)))
-            }
-            DrawerMode::Fixed => (None, None, Some(layout)),
-            DrawerMode::Sliding => {
-                if self.header_builder.is_some() && self.drawer_builder.is_some() {
-                    (
-                        Some(layout.child(0)),
-                        Some(layout.child(1)),
-                        Some(layout.child(2)),
-                    )
-                } else if self.header_builder.is_some() {
-                    (Some(layout.child(0)), None, Some(layout.child(1)))
-                } else if self.drawer_builder.is_some() {
-                    (None, Some(layout.child(0)), Some(layout.child(1)))
-                } else {
-                    (None, None, Some(layout.child(0)))
-                }
-            }
-        };
+        let (header_layout, drawer_layout, page_layout) = get_layout(
+            layout,
+            self.mode,
+            !self.header_cache.is_empty(),
+            !self.drawer_cache.is_empty(),
+        );
 
         let drawer_interaction = if let Some(child) = self.drawer_cache.get_element()
             && has_drawer
@@ -830,43 +820,12 @@ where
             let header_index = children_len - 1;
             let drawer_index = children_len - 2;
 
-            let (header_layout, drawer_layout, page_layout) = match self.mode {
-                DrawerMode::Fixed
-                    if self.header_builder.is_some() && self.drawer_builder.is_some() =>
-                {
-                    (
-                        Some(layout.child(0)),
-                        Some(layout.child(1).child(0)),
-                        Some(layout.child(1).child(1)),
-                    )
-                }
-                DrawerMode::Fixed
-                    if self.header_builder.is_some() && self.drawer_builder.is_none() =>
-                {
-                    (Some(layout.child(0)), None, Some(layout.child(1)))
-                }
-                DrawerMode::Fixed
-                    if self.header_builder.is_none() && self.drawer_builder.is_some() =>
-                {
-                    (None, Some(layout.child(0)), Some(layout.child(1)))
-                }
-                DrawerMode::Fixed => (None, None, Some(layout)),
-                DrawerMode::Sliding => {
-                    if self.header_builder.is_some() && self.drawer_builder.is_some() {
-                        (
-                            Some(layout.child(0)),
-                            Some(layout.child(1)),
-                            Some(layout.child(2)),
-                        )
-                    } else if self.header_builder.is_some() {
-                        (Some(layout.child(0)), None, Some(layout.child(1)))
-                    } else if self.drawer_builder.is_some() {
-                        (None, Some(layout.child(0)), Some(layout.child(1)))
-                    } else {
-                        (None, None, Some(layout.child(0)))
-                    }
-                }
-            };
+            let (header_layout, drawer_layout, page_layout) = get_layout(
+                layout,
+                self.mode,
+                !self.header_cache.is_empty(),
+                !self.drawer_cache.is_empty(),
+            );
 
             if let Some(child) = self.header_cache.get_element() {
                 child.as_widget().draw(
@@ -1005,43 +964,12 @@ where
 
             let page_index = self.children.get_index_of(&disc).unwrap();
 
-            let (header_layout, drawer_layout, page_layout) = match self.mode {
-                DrawerMode::Fixed
-                    if self.header_builder.is_some() && self.drawer_builder.is_some() =>
-                {
-                    (
-                        Some(layout.child(0)),
-                        Some(layout.child(1).child(0)),
-                        Some(layout.child(1).child(1)),
-                    )
-                }
-                DrawerMode::Fixed
-                    if self.header_builder.is_some() && self.drawer_builder.is_none() =>
-                {
-                    (Some(layout.child(0)), None, Some(layout.child(1)))
-                }
-                DrawerMode::Fixed
-                    if self.header_builder.is_none() && self.drawer_builder.is_some() =>
-                {
-                    (None, Some(layout.child(0)), Some(layout.child(1)))
-                }
-                DrawerMode::Fixed => (None, None, Some(layout)),
-                DrawerMode::Sliding => {
-                    if self.header_builder.is_some() && self.drawer_builder.is_some() {
-                        (
-                            Some(layout.child(0)),
-                            Some(layout.child(1)),
-                            Some(layout.child(2)),
-                        )
-                    } else if self.header_builder.is_some() {
-                        (Some(layout.child(0)), None, Some(layout.child(1)))
-                    } else if self.drawer_builder.is_some() {
-                        (None, Some(layout.child(0)), Some(layout.child(1)))
-                    } else {
-                        (None, None, Some(layout.child(0)))
-                    }
-                }
-            };
+            let (header_layout, drawer_layout, page_layout) = get_layout(
+                layout,
+                self.mode,
+                !self.header_cache.is_empty(),
+                !self.drawer_cache.is_empty(),
+            );
 
             let (header_state, tree_slice) = tree.children.split_last_mut().unwrap();
             let (drawer_state, tree_slice) = tree_slice.split_last_mut().unwrap();
@@ -1129,6 +1057,43 @@ impl Transition {
                 ((frame.get_value().div(100.0) - 1.0) * width).abs() - width,
                 ((frame.get_value().div(100.0) * 0.6) - 0.6).abs(),
             )),
+        }
+    }
+}
+
+fn get_layout<'a>(
+    layout: Layout<'a>,
+    mode: DrawerMode,
+    has_header: bool,
+    has_drawer: bool,
+) -> (Option<Layout<'a>>, Option<Layout<'a>>, Option<Layout<'a>>) {
+    match mode {
+        DrawerMode::Fixed if has_header && has_drawer => (
+            Some(layout.child(0)),
+            Some(layout.child(1).child(0)),
+            Some(layout.child(1).child(1)),
+        ),
+        DrawerMode::Fixed if has_header && has_drawer => {
+            (Some(layout.child(0)), None, Some(layout.child(1)))
+        }
+        DrawerMode::Fixed if has_header && has_drawer => {
+            (None, Some(layout.child(0)), Some(layout.child(1)))
+        }
+        DrawerMode::Fixed => (None, None, Some(layout)),
+        DrawerMode::Sliding => {
+            if has_header && has_drawer {
+                (
+                    Some(layout.child(0)),
+                    Some(layout.child(1)),
+                    Some(layout.child(2)),
+                )
+            } else if has_header {
+                (Some(layout.child(0)), None, Some(layout.child(1)))
+            } else if has_drawer {
+                (None, Some(layout.child(0)), Some(layout.child(1)))
+            } else {
+                (None, None, Some(layout.child(0)))
+            }
         }
     }
 }

@@ -270,10 +270,76 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
-        _renderer: &Renderer,
+        renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         let state = tree.state.downcast_mut::<State<Key>>();
+        let children_layout: Vec<_> = layout.children().collect();
+
+        if state.transition.is_some()
+            && let Some(key) = state.get_previous_key()
+        {
+            let page_index = tree.children.len() - 3;
+            let header_index = tree.children.len() - 4;
+            let page_layout = children_layout[0].children().collect::<Vec<_>>();
+
+            let disc = std::mem::discriminant(key);
+
+            if let Some(header) = self.secondary_header.get_element_mut() {
+                operation.traverse(&mut |operation| {
+                    header.as_widget_mut().operate(
+                        &mut tree.children[header_index],
+                        page_layout[0],
+                        renderer,
+                        operation,
+                    );
+                });
+            }
+
+            if let Some(page) = self.children.get_mut(&disc) {
+                operation.traverse(&mut |operation| {
+                    page.get_element_mut().unwrap().as_widget_mut().operate(
+                        &mut tree.children[page_index],
+                        *page_layout.last().unwrap(),
+                        renderer,
+                        operation,
+                    );
+                });
+            }
+        }
+
+        let page_index = tree.children.len() - 1;
+        let header_index = tree.children.len() - 2;
+        let page_layout = children_layout
+            .last()
+            .unwrap()
+            .children()
+            .collect::<Vec<_>>();
+
+        let key = state.history.last().unwrap();
+        let disc = std::mem::discriminant(key);
+
+        if let Some(header) = self.main_header.get_element_mut() {
+            operation.traverse(&mut |operation| {
+                header.as_widget_mut().operate(
+                    &mut tree.children[header_index],
+                    page_layout[0],
+                    renderer,
+                    operation,
+                );
+            });
+        }
+
+        if let Some(page) = self.children.get_mut(&disc) {
+            operation.traverse(&mut |operation| {
+                page.get_element_mut().unwrap().as_widget_mut().operate(
+                    &mut tree.children[page_index],
+                    *page_layout.last().unwrap(),
+                    renderer,
+                    operation,
+                );
+            });
+        }
 
         operation.custom(self.id.as_ref(), layout.bounds(), state);
 
