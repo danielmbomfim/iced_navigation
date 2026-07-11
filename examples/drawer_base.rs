@@ -5,7 +5,7 @@ mod app {
         widget::{Column, Space, button, column, container, row, scrollable, text},
     };
     use iced_font_awesome::fa_icon_solid;
-    use iced_navigation::base::{
+    use iced_navigation::{
         drawer_navigator::{DrawerMode, PageParams, drawer_navigator},
         operations::{navigate, open_drawer},
     };

@@ -16,7 +16,7 @@ use iced::{
 use iced::{Padding, Point, Vector};
 use indexmap::IndexMap;
 
-use crate::base::{NavigatorElement, NavigatorElementSource, NavigatorState};
+use crate::widgets::{NavigatorElement, NavigatorElementSource, NavigatorState};
 
 type TabsBuilderFn<'a, Key, Message, Theme, Renderer> =
     dyn for<'b> Fn(PageParams<Key>, &Vec<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;

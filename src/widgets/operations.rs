@@ -5,7 +5,7 @@ use iced::{
     advanced::widget::{Id, Operation, operate},
 };
 
-use crate::base::{self, NavigatorState};
+use crate::widgets::{self, NavigatorState};
 
 fn clear_history_op<T, Key>(target: Option<Id>) -> impl Operation<T>
 where
@@ -26,7 +26,7 @@ where
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
-            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::stack_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -37,7 +37,7 @@ where
             }
 
             #[cfg(feature = "tabs")]
-            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -48,7 +48,7 @@ where
             }
 
             #[cfg(feature = "drawer")]
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -85,7 +85,7 @@ where
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
-            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::stack_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -96,7 +96,7 @@ where
             }
 
             #[cfg(feature = "tabs")]
-            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -107,7 +107,7 @@ where
             }
 
             #[cfg(feature = "drawer")]
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -144,7 +144,7 @@ where
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
-            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::stack_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -155,7 +155,7 @@ where
             }
 
             #[cfg(feature = "tabs")]
-            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -166,7 +166,7 @@ where
             }
 
             #[cfg(feature = "drawer")]
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -203,7 +203,7 @@ where
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
             #[cfg(feature = "stack")]
-            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::stack_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -214,7 +214,7 @@ where
             }
 
             #[cfg(feature = "tabs")]
-            if let Some(value) = state.downcast_mut::<base::tabs_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::tabs_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -225,7 +225,7 @@ where
             }
 
             #[cfg(feature = "drawer")]
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -262,7 +262,7 @@ where
         }
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -299,7 +299,7 @@ where
         }
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
-            if let Some(value) = state.downcast_mut::<base::drawer_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::drawer_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {
@@ -336,7 +336,7 @@ where
         }
 
         fn custom(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn std::any::Any) {
-            if let Some(value) = state.downcast_mut::<base::stack_navigator::State<Key>>() {
+            if let Some(value) = state.downcast_mut::<widgets::stack_navigator::State<Key>>() {
                 value.request_update();
 
                 if id.is_some_and(|id| self.target.as_ref().is_some_and(|target| target != id)) {

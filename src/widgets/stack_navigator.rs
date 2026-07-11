@@ -18,7 +18,7 @@ use iced::{
 };
 
 use crate::animation::Frame;
-use crate::base::{NavigatorElement, NavigatorElementSource, NavigatorState};
+use crate::widgets::{NavigatorElement, NavigatorElementSource, NavigatorState};
 
 type HeaderBuilder<'a, Key, Message, Theme, Renderer> =
     dyn Fn(PageParams<Key>) -> Element<'a, Message, Theme, Renderer> + 'a;

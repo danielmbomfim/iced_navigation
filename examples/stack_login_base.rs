@@ -4,7 +4,7 @@ use iced::{
     widget::{Row, Space, button, column, container, row, scrollable, text, text_input},
 };
 use iced_font_awesome::fa_icon_solid;
-use iced_navigation::base::{
+use iced_navigation::{
     operations::{clear_history, go_back, navigate},
     stack_navigator::{PageParams, stack_navigator},
 };
