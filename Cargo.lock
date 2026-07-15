@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "iced_navigation"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "iced",
  "iced_font_awesome",
