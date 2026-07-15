@@ -1,4 +1,5 @@
 # iced\_navigation
+
 [![Crates.io](https://img.shields.io/crates/v/iced_navigation?style=flat-square)](https://crates.io/crates/iced_navigation)
 [![Crates.io](https://img.shields.io/crates/d/iced_navigation?style=flat-square)](https://crates.io/crates/iced_navigation)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
@@ -25,7 +26,7 @@ To use `iced_navigation`, add it to your `Cargo.toml`:
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = "1.6.0"
+iced_navigation = "2.0.0"
 ```
 
 ## Usage
@@ -35,76 +36,49 @@ iced_navigation = "1.6.0"
 ```rust
 use iced::{Element, Task};
 use iced_navigation::{
-    stack_navigator::{StackNavigator, StackNavigatorMapper},
-    NavigationAction, NavigationConvertible, PageComponent,
+    operations::{go_back, navigate},
+    stack_navigator::stack_navigator,
 };
 
-// Defines the message enum used by the application
 #[derive(Debug, Clone)]
 enum Message {
-    NavigationAction(NavigationAction<Page>),
-    // Your aplication messages are defined here
+    Navigate(Page),
+    GoBack,
 }
 
-impl NavigationConvertible for Message {
-    type PageMapper = Page;
-
-    // Maps navigation actions to your message enum
-    fn from_action(action: NavigationAction<Self::PageMapper>) -> Self {
-        Self::NavigationAction(action)
-    }
-}
-
-// This enum defines the pages available to the navigator
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Page {
     LoginPage,
-    HomePage(String),
+    HomePage,
 }
 
-// This implementation maps pages to their titles and UI components
-impl StackNavigatorMapper for Page {
-    type Message = Message;
+struct App;
 
-    fn title(&self) -> String {
-        match self {
-            Page::HomePage(_) => "Home page".to_owned(),
-            Page::LoginPage => "Login page".to_owned(),
-        }
-    }
-
-    fn into_component(&self) -> Box<dyn PageComponent<Self::Message>> {
-        // The page components must implement the PageComponent trait
-        match self {
-            Page::HomePage(name) => Box::new(HomeComponent::new(name.to_owned())),
-            Page::LoginPage => Box::new(LoginComponent::new()),
-        }
-    }
+fn login_page<'a>() -> Element<'a, Message> {
+    todo!()
 }
 
-struct App {
-    nav: StackNavigator<Message, Page>,
+fn home_page<'a>() -> Element<'a, Message> {
+    todo!()
 }
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        let (nav, task) = StackNavigator::new(Page::LoginPage);
-
-        (Self { nav }, task)
+        (Self, Task::none())
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
-        // this ensures any navigation action is handled corretly by the navigator
-        if let Message::NavigationAction(action) = &message {
-            return self.nav.handle_actions(action.clone());
+        match message {
+            Message::Navigate(page) => navigate(page),
+            Message::GoBack => go_back::<Message, Page>(),
         }
-
-        // the navigator will pass any message to the update function of the current page
-        self.nav.update(message)
     }
 
     fn view<'a>(&'a self) -> Element<'a, Message> {
-        self.nav.view()
+        stack_navigator(Page::LoginPage)
+            .insert_page(Page::LoginPage, login_page())
+            .insert_page(Page::HomePage, home_page())
+            .into()
     }
 }
 
@@ -120,75 +94,60 @@ To use tab navigation, you must first enable the tabs feature in your Cargo.toml
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = { version = "1.6.0", features = ["tabs"] }
+iced_navigation = { version = "2.0.0", features = ["tabs"] }
 ```
 
 ```rust
 use iced::{Element, Task};
 use iced_navigation::{
-    tabs_navigator::{TabsNavigator, TabsNavigatorMapper},
-    NavigationAction, NavigationConvertible, PageComponent,
+    operations::navigate,
+    tabs_navigator::{Mode, tabs_navigator},
 };
 
-// Defines the message enum used by the application
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum Message {
-    NavigationAction(NavigationAction<Page>),
-    // Your aplication messages are defined here
+    Navigate(Page),
 }
 
-impl NavigationConvertible for Message {
-    type PageMapper = Page;
-
-    // Maps navigation actions to your message enum
-    fn from_action(action: NavigationAction<Self::PageMapper>) -> Self {
-        Self::NavigationAction(action)
-    }
-}
-
-// This enum defines the pages available to the navigator
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Page {
+    ArticlePage,
+    ListPage,
     SettingsPage,
-    HomePage,
 }
 
-// This implementation maps pages to their titles and UI components
-impl TabsNavigatorMapper for Page {
-    type Message = Message;
-
-    fn into_component(&self) -> Box<dyn PageComponent<Self::Message>> {
-        // The page components must implement the PageComponent trait
-        match self {
-            Page::HomePage => Box::new(HomeComponent::new()),
-            Page::SettingsPage => Box::new(SettingsComponent::new()),
-        }
-    }
+fn article_page<'a>() -> Element<'a, Message> {
+    todo!()
 }
 
-struct App {
-    nav: TabsNavigator<Message, Page>,
+fn list_page<'a>() -> Element<'a, Message> {
+    todo!()
 }
+
+fn settings_page<'a>() -> Element<'a, Message> {
+    todo!()
+}
+
+struct App;
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        let (nav, task) = TabsNavigator::new([Page::HomePage, Page::SettingsPage], Page::HomePage);
-
-        (Self { nav }, task)
+        (Self, Task::none())
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
-        // this ensures any navigation action is handled corretly by the navigator
-        if let Message::NavigationAction(action) = &message {
-            return self.nav.handle_actions(action.clone());
+        match message {
+            Message::Navigate(page) => navigate(page),
         }
-
-        // the navigator will pass any message to the update function of the current page
-        self.nav.update(message)
     }
 
     fn view<'a>(&'a self) -> Element<'a, Message> {
-        self.nav.view()
+        tabs_navigator(Page::ArticlePage)
+            .mode(Mode::Bottom)
+            .insert_page(Page::ArticlePage, article_page())
+            .insert_page(Page::ListPage, list_page())
+            .insert_page(Page::SettingsPage, settings_page())
+            .into()
     }
 }
 
@@ -204,93 +163,123 @@ To use drawer navigation, you must first enable the drawer feature in your Cargo
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = { version = "1.6.0", features = ["drawer"] }
+iced_navigation = { version = "2.0.0", features = ["drawer"] }
 ```
 
 ```rust
 use iced::{Element, Task};
 use iced_navigation::{
-    drawer_navigator::{DrawerNavigator, DrawerNavigatorMapper},
-    NavigationAction, NavigationConvertible, PageComponent,
+    drawer_navigator::{DrawerMode, drawer_navigator},
+    operations::{navigate, open_drawer},
 };
 
-// Defines the message enum used by the application
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum Message {
-    NavigationAction(NavigationAction<Page>),
-    // Your aplication messages are defined here
+    Navigate(Page),
+    OpenDrawer,
 }
 
-impl NavigationConvertible for Message {
-    type PageMapper = Page;
-
-    // Maps navigation actions to your message enum
-    fn from_action(action: NavigationAction<Self::PageMapper>) -> Self {
-        Self::NavigationAction(action)
-    }
-}
-
-// This enum defines the pages available to the navigator
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Page {
+    ArticlePage,
+    ListPage,
     SettingsPage,
-    HomePage,
 }
 
-// This implementation maps pages to their titles and UI components
-impl DrawerNavigatorMapper for Page {
-    type Message = Message;
-
+impl Page {
     fn title(&self) -> String {
         match self {
-            Page::HomePage => "Home page".to_owned(),
-            Page::SettingsPage => "Login page".to_owned(),
-        }
-    }
-
-    fn into_component(&self) -> Box<dyn PageComponent<Self::Message>> {
-        // The page components must implement the PageComponent trait
-        match self {
-            Page::HomePage => Box::new(HomeComponent::new()),
-            Page::SettingsPage => Box::new(SettingsComponent::new()),
+            Self::ArticlePage => "Article".to_owned(),
+            Self::ListPage => "List".to_owned(),
+            Self::SettingsPage => "Settings".to_owned(),
         }
     }
 }
 
-struct App {
-    nav: DrawerNavigator<Message, Page>,
+fn article_page<'a>() -> Element<'a, Message> {
+    todo!()
 }
+
+fn list_page<'a>() -> Element<'a, Message> {
+    todo!()
+}
+
+fn settings_page<'a>() -> Element<'a, Message> {
+    todo!()
+}
+
+struct App;
 
 impl App {
     fn new() -> (Self, Task<Message>) {
-        let (nav, task) =
-            DrawerNavigator::new([Page::HomePage, Page::SettingsPage], Page::HomePage);
-
-        (Self { nav }, task)
+        (Self, Task::none())
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
-        // this ensures any navigation action is handled corretly by the navigator
-        if let Message::NavigationAction(action) = &message {
-            return self.nav.handle_actions(action.clone());
+        match message {
+            Message::Navigate(page) => navigate(page),
+            Message::OpenDrawer => open_drawer::<Message, Page>(),
         }
-
-        // the navigator will pass any message to the update function of the current page
-        self.nav.update(message)
     }
 
     fn view<'a>(&'a self) -> Element<'a, Message> {
-        self.nav.view()
+        drawer_navigator(Page::ArticlePage)
+            .mode(DrawerMode::Sliding)
+            .insert_page(Page::ArticlePage, article_page())
+            .insert_page(Page::ListPage, list_page())
+            .insert_page(Page::SettingsPage, settings_page())
+            .into()
     }
 }
 
 fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view).run()
 }
-
 ```
 
-Complete examples can be found in the `examples` folder.
+## Examples
+
+Complete working examples are available in the `examples` directory:
+
+### Stack Login Example
+
+**File**: [examples/stack_login.rs](examples/stack_login.rs)
+
+Demonstrates a stack-based navigation flow with login functionality. Features username/password input and navigation between login, home, and details pages.
+
+```bash
+cargo run --example stack_login
+```
+
+### Bottom Tabs Example
+
+**File**: [examples/bottom_tabs.rs](examples/bottom_tabs.rs)
+
+Shows tab-based navigation with tabs positioned at the bottom of the window. Includes Article, List, and Settings pages with icon-based tab indicators.
+
+```bash
+cargo run --example bottom_tabs --features tabs
+```
+
+### Drawer Example
+
+**File**: [examples/drawer.rs](examples/drawer.rs)
+
+Demonstrates drawer-based navigation with a side menu that slides in/out. Features Article, List, and Settings pages accessible through a drawer menu.
+
+```bash
+cargo run --example drawer --features drawer
+```
+
+### Nested Navigators Example
+
+**File**: [examples/nested_navigators.rs](examples/nested_navigators.rs)
+
+Advanced example combining both stack and tabs navigation. Demonstrates how to nest multiple navigator types together for more complex UI hierarchies.
+
+```bash
+cargo run --example nested_navigators --features "stack tabs"
+```
 
 ## Contributing
 
