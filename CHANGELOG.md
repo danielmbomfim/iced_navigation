@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/danielmbomfim/iced_navigation/compare/v1.4.0...v2.0.0) - 2026-07-15
+
+### Added
+
+- *(stack)* implement new push operation
+- *(base)* implements a new drawer navigator widget
+- *(base)* implements a new tabs navigator widget
+- *(base)* implements a on_navigation_end method to emit a message when
+- *(base)* adds support for header to stack navigator
+- *(base)* implements a new tabs navigator widget
+- *(base)* implements a new stack navigator widget
+
+### Fixed
+
+- fixed operate method of navigators to traverse inner components
+- correct typo in examples
+- *(base)* fix bug causing lost of page state after poping the history
+- fix crash when clearing history history
+- fix bug causing pages to lose its state after navigation
+- *(base)* fix bug causing crash on go back of stack navigator
+- *(base)* removes static lifetime requirements of closures
+- *(base)* fix overlay of widgets in the drawer navigator
+- *(base)* fix overlay of widgets in the tabs navigator
+- *(base)* fix stack crash on navigation
+- *(base)* fix overlay of widgets in the stack navigator
+- *(tabs)* fix go back animation of base tabs
+- fixes old navigators for new iced version
+
+### Other
+
+- implements a nested navigator example
+- rename examples
+- [**breaking**] rename base to widgets and update import paths
+- simplify navigators implementation
+- remove deprecated library implementation
+- *(base)* improve legibility of overlay method of stack navigator
+- *(base)* add a drawer example
+- *(base)* add bottom navigation example
+- *(iced)* bump dependencies
+- *(stack_nativator)* updates stack_login_page example
+
 ## [1.6.0](https://github.com/danielmbomfim/iced_navigation/compare/iced_navigation-v1.5.0...iced_navigation-v1.6.0) - 2025-12-14
 
 ### Added
