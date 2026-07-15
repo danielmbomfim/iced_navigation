@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- update README
+- update examples dependencies
 - *(stack)* implement new push operation
 - *(base)* implements a new drawer navigator widget
 - *(base)* implements a new tabs navigator widget
