@@ -1,4 +1,3 @@
-#[cfg(feature = "tabs")]
 mod app {
     use iced::{
         Alignment, Element, Length, Task, Theme,
@@ -196,12 +195,6 @@ mod app {
     }
 }
 
-#[cfg(feature = "tabs")]
 fn main() -> iced::Result {
     iced::application(app::App::new, app::App::update, app::App::view).run()
-}
-
-#[cfg(not(feature = "tabs"))]
-fn main() {
-    println!("run this example with the \"tabs\" feature enabled");
 }

@@ -1,4 +1,3 @@
-#[cfg(feature = "drawer")]
 mod app {
     use iced::{
         Alignment, Element, Length, Task, Theme,
@@ -290,12 +289,6 @@ mod app {
     }
 }
 
-#[cfg(feature = "drawer")]
 fn main() -> iced::Result {
     iced::application(app::App::new, app::App::update, app::App::view).run()
-}
-
-#[cfg(not(feature = "drawer"))]
-fn main() {
-    println!("run this example with the \"drawer\" feature enabled");
 }
