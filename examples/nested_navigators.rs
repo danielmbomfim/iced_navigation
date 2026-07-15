@@ -1,28 +1,43 @@
-#[cfg(feature = "tabs")]
+#[cfg(all(feature = "tabs", feature = "stack"))]
 mod app {
     use iced::{
         Alignment, Element, Length, Task, Theme,
-        widget::{Column, Row, button, column, container, row, scrollable, text},
+        widget::{Column, Row, button, column, container, row, scrollable, text, text_input},
     };
     use iced_font_awesome::fa_icon_solid;
     use iced_navigation::{
-        operations::navigate,
+        operations::navigate_by_id,
+        stack_navigator::stack_navigator,
         tabs_navigator::{Mode, PageParams, tabs_navigator},
     };
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone)]
     pub enum Message {
         Navigate(Page),
+        Username(String),
+        Password(String),
     }
 
     #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
     pub enum Page {
+        StackPage(StackPage),
+        TabsPage(TabsPage),
+    }
+
+    #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+    pub enum StackPage {
+        LoginPage,
+        LoggedPage,
+    }
+
+    #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
+    pub enum TabsPage {
         ArticlePage,
         ListPage,
         SettingsPage,
     }
 
-    impl Page {
+    impl TabsPage {
         fn icon(&self) -> String {
             match self {
                 Self::ArticlePage => "newspaper".to_owned(),
@@ -32,27 +47,57 @@ mod app {
         }
     }
 
-    pub struct App;
+    pub struct App {
+        username: String,
+        password: String,
+    }
 
     impl App {
         pub fn new() -> (Self, Task<Message>) {
-            (Self, Task::none())
+            (
+                Self {
+                    username: String::new(),
+                    password: String::new(),
+                },
+                Task::none(),
+            )
         }
 
         pub fn update(&mut self, message: Message) -> Task<Message> {
             match message {
-                Message::Navigate(page) => navigate(page),
+                Message::Navigate(page) => match page {
+                    Page::StackPage(page) => navigate_by_id(page, "stack".into()),
+                    Page::TabsPage(page) => navigate_by_id(page, "tabs".into()),
+                },
+                Message::Username(username) => {
+                    self.username = username;
+                    Task::none()
+                }
+                Message::Password(password) => {
+                    self.password = password;
+                    Task::none()
+                }
             }
         }
 
         pub fn view<'a>(&'a self) -> Element<'a, Message> {
-            tabs_navigator(Page::ArticlePage)
+            let tabs = tabs_navigator(TabsPage::ArticlePage)
+                .id("tabs")
                 .mode(Mode::Bottom)
-                .insert_page(Page::ArticlePage, article_page())
-                .insert_page(Page::ListPage, list_page())
-                .insert_page(Page::SettingsPage, settings_page())
-                .tabs_widget(tabs)
-                .into()
+                .insert_page(TabsPage::ArticlePage, article_page())
+                .insert_page(TabsPage::ListPage, list_page())
+                .insert_page(TabsPage::SettingsPage, settings_page())
+                .tabs_widget(tabs);
+
+            let stack = stack_navigator(StackPage::LoginPage)
+                .id("stack")
+                .insert_page(
+                    StackPage::LoginPage,
+                    login_home(&self.username, &self.password),
+                )
+                .insert_page(StackPage::LoggedPage, tabs);
+
+            stack.into()
         }
     }
 
@@ -83,6 +128,33 @@ mod app {
         "Maximilian Epifanio Nuremberg",
         "Artemio Emi Andrade",
     ];
+
+    fn login_home<'a>(username: &'a str, password: &'a str) -> Element<'a, Message> {
+        container(
+            column![
+                text_input("Username", username)
+                    .on_input(Message::Username)
+                    .on_submit(Message::Navigate(Page::StackPage(StackPage::LoggedPage))),
+                text_input("Password", password)
+                    .on_input(Message::Password)
+                    .on_submit(Message::Navigate(Page::StackPage(StackPage::LoggedPage))),
+                button(
+                    container(text("Login"))
+                        .align_x(Alignment::Center)
+                        .width(Length::Fixed(100.0))
+                )
+                .on_press(Message::Navigate(Page::StackPage(StackPage::LoggedPage))),
+            ]
+            .align_x(Alignment::Center)
+            .spacing(10)
+            .max_width(400.0),
+        )
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
 
     fn article_page<'a>() -> Element<'a, Message> {
         column![
@@ -151,6 +223,7 @@ mod app {
               "Mauris eleifend iaculis molestie. Donec fringilla mi eget justo pellentesque, ut dapibus lorem iaculis. Nullam quis mattis nunc, ",
               "et placerat erat. Mauris eget dignissim orci, sit amet scelerisque ante.\n"
             )).size(20),
+            button("Log out").on_press(Message::Navigate(Page::StackPage(StackPage::LoginPage)))
         ]
         .height(Length::Fill)
         .width(Length::Fill)
@@ -159,7 +232,7 @@ mod app {
         .into()
     }
 
-    fn tabs<'a>(params: PageParams<Page>, pages: &Vec<Page>) -> Element<'a, Message> {
+    fn tabs<'a>(params: PageParams<TabsPage>, pages: &Vec<TabsPage>) -> Element<'a, Message> {
         container(pages.iter().fold(Row::new(), |row, page| {
             let selected = *page == params.current_page;
 
@@ -184,7 +257,7 @@ mod app {
                 .on_press_maybe(if selected {
                     None
                 } else {
-                    Some(Message::Navigate(page.clone()))
+                    Some(Message::Navigate(Page::TabsPage(page.clone())))
                 }),
             )
         }))
@@ -196,12 +269,12 @@ mod app {
     }
 }
 
-#[cfg(feature = "tabs")]
+#[cfg(all(feature = "tabs", feature = "stack"))]
 fn main() -> iced::Result {
     iced::application(app::App::new, app::App::update, app::App::view).run()
 }
 
-#[cfg(not(feature = "tabs"))]
+#[cfg(not(all(feature = "tabs", feature = "stack")))]
 fn main() {
-    println!("run this example with the \"tabs\" feature enabled");
+    println!("run this example with the \"tabs\" and \"stack\" features enabled");
 }

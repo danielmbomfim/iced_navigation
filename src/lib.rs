@@ -1,61 +1,11 @@
-use animation::Frame;
-
-#[cfg(feature = "derive")]
-pub use iced_navigation_derive::{navigator_message, NavigationConvertible};
+mod widgets;
 
 #[cfg(feature = "drawer")]
-use crate::drawer_navigator::DrawerAction;
-
+pub use widgets::drawer_navigator;
+pub use widgets::operations;
 #[cfg(feature = "stack")]
-pub mod stack_navigator;
+pub use widgets::stack_navigator;
 #[cfg(feature = "tabs")]
-pub mod tabs_navigator;
-
-#[cfg(feature = "drawer")]
-pub mod drawer_navigator;
-
-pub mod components {
-    #[cfg(feature = "drawer")]
-    pub mod drawer;
-    pub mod header;
-    pub(crate) mod pages_container;
-    #[cfg(feature = "tabs")]
-    pub mod tabs;
-}
+pub use widgets::tabs_navigator;
 
 pub(crate) mod animation;
-
-#[derive(Debug, Clone)]
-pub enum NavigationAction<PageMapper> {
-    Navigate(PageMapper),
-    Tick(Frame),
-    GoBack,
-    #[cfg(feature = "drawer")]
-    Drawer(DrawerAction),
-}
-
-pub trait Navigator<PageMapper> {
-    fn is_on_page(&self, page: PageMapper) -> bool;
-
-    fn is_on_page_and<F: Fn() -> bool>(&self, page: PageMapper, f: F) -> bool;
-
-    fn clear_history(&mut self);
-
-    fn pop_history(&mut self);
-}
-
-pub trait NavigationConvertible {
-    type PageMapper;
-
-    fn from_action(action: NavigationAction<Self::PageMapper>) -> Self;
-}
-
-pub trait PageComponent<Message> {
-    fn view<'a>(&'a self) -> iced::Element<'a, Message>;
-
-    fn update(&mut self, message: Message) -> iced::Task<Message>;
-
-    fn on_load(&self) -> iced::Task<Message> {
-        iced::Task::none()
-    }
-}

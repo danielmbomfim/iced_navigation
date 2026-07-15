@@ -11,6 +11,7 @@ pub struct Frame {
     f: Option<fn(f32) -> f32>,
 }
 
+#[allow(dead_code)]
 impl Frame {
     pub fn new() -> Self {
         Self {
