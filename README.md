@@ -26,7 +26,7 @@ To use `iced_navigation`, add it to your `Cargo.toml`:
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = "2.0.0"
+iced_navigation = "2.0.1"
 ```
 
 ## Usage
@@ -94,7 +94,7 @@ To use tab navigation, you must first enable the tabs feature in your Cargo.toml
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = { version = "2.0.0", features = ["tabs"] }
+iced_navigation = { version = "2.0.1", features = ["tabs"] }
 ```
 
 ```rust
@@ -163,7 +163,7 @@ To use drawer navigation, you must first enable the drawer feature in your Cargo
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = { version = "2.0.0", features = ["drawer"] }
+iced_navigation = { version = "2.0.1", features = ["drawer"] }
 ```
 
 ```rust
