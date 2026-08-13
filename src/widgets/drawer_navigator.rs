@@ -3,18 +3,13 @@ use std::iter;
 use std::mem::Discriminant;
 use std::ops::Div;
 
-use iced::advanced::graphics::core::window;
-use iced::advanced::overlay;
-use iced::advanced::renderer::Quad;
-use iced::advanced::widget::Operation;
-use iced::widget::Id;
-use iced::{Color, Padding, Vector, touch};
-use iced::{
-    Element, Event, Length, Rectangle, Size, Theme,
-    advanced::{
-        Clipboard, Layout, Shell, Widget, layout, mouse, renderer,
-        widget::{Tree, tree},
-    },
+use iced_core::{
+    Clipboard, Color, Element, Event, Layout, Length, Padding, Rectangle, Shell, Size, Theme,
+    Vector, Widget, layout, mouse, overlay,
+    renderer::{self, Quad},
+    touch,
+    widget::{Id, Operation, Tree, tree},
+    window,
 };
 use indexmap::IndexMap;
 
@@ -135,7 +130,7 @@ pub(crate) enum Transition {
     Collapse,
 }
 
-pub struct DrawerNavigator<'a, Key, Message, Renderer = iced::Renderer>
+pub struct DrawerNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
 {
@@ -267,7 +262,7 @@ impl<'a, Key, Message, Renderer> Widget<Message, Theme, Renderer>
 where
     Key: Eq + Hash + Clone + 'static,
     Message: Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<Key>>()
@@ -473,7 +468,7 @@ where
                                 self.height,
                                 Padding::ZERO,
                                 0.0,
-                                iced::Alignment::Start,
+                                iced_core::Alignment::Start,
                                 &mut items[if self.header_builder.is_some() { 1 } else { 0 }..],
                                 &mut tree.children[page_index..=drawer_index],
                             )
@@ -515,13 +510,14 @@ where
                         );
 
                         match header_node {
-                            Some(node) => {
+                            Some(header_node) => {
                                 let base_size = page_node.size();
-                                page_node.translate_mut(Vector::new(0.0, node.size().height));
+                                page_node
+                                    .translate_mut(Vector::new(0.0, header_node.size().height));
 
                                 layout::Node::with_children(
                                     base_size,
-                                    iter::once(node)
+                                    iter::once(header_node)
                                         .chain(drawer_node)
                                         .chain(iter::once(page_node))
                                         .collect(),
@@ -615,8 +611,12 @@ where
         let has_drawer = self.drawer_builder.is_some()
             && (state.expanded || matches!(self.mode, DrawerMode::Fixed));
 
-        let (header_layout, drawer_layout, page_layout) =
-            get_layout(layout, self.mode, !self.header_cache.is_empty(), has_drawer);
+        let (header_layout, drawer_layout, page_layout) = get_layout(
+            layout,
+            self.mode,
+            !self.header_cache.is_empty(),
+            !self.drawer_cache.is_empty(),
+        );
 
         if let Some(child) = self.drawer_cache.get_element_mut()
             && has_drawer
@@ -951,7 +951,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Option<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
         if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
             let state = tree.state.downcast_ref::<State<Key>>();
 
@@ -1073,10 +1073,10 @@ fn get_layout<'a>(
             Some(layout.child(1).child(0)),
             Some(layout.child(1).child(1)),
         ),
-        DrawerMode::Fixed if has_header && has_drawer => {
+        DrawerMode::Fixed if has_header && !has_drawer => {
             (Some(layout.child(0)), None, Some(layout.child(1)))
         }
-        DrawerMode::Fixed if has_header && has_drawer => {
+        DrawerMode::Fixed if !has_header && has_drawer => {
             (None, Some(layout.child(0)), Some(layout.child(1)))
         }
         DrawerMode::Fixed => (None, None, Some(layout)),
@@ -1103,7 +1103,7 @@ impl<'a, Key, Message, Renderer> From<DrawerNavigator<'a, Key, Message, Renderer
 where
     Key: 'static + Eq + Hash + Clone,
     Message: 'a + Clone,
-    Renderer: 'a + iced::advanced::Renderer,
+    Renderer: 'a + iced_core::Renderer,
 {
     fn from(drawer: DrawerNavigator<'a, Key, Message, Renderer>) -> Self {
         Self::new(drawer)
@@ -1115,7 +1115,7 @@ pub fn drawer_navigator<'a, Key, Message, Renderer>(
 ) -> DrawerNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     DrawerNavigator::new(home_page)
 }

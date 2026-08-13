@@ -1207,7 +1207,10 @@ name = "iced_navigation"
 version = "2.0.1"
 dependencies = [
  "iced",
+ "iced_core",
  "iced_font_awesome",
+ "iced_runtime",
+ "iced_widget",
  "indexmap",
 ]
 

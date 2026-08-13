@@ -1,19 +1,14 @@
 use std::hash::Hash;
 use std::mem::Discriminant;
 
-use iced::advanced::graphics::core::window;
-use iced::advanced::layout::Node;
-use iced::advanced::overlay;
-use iced::advanced::widget::Operation;
-use iced::widget::Id;
-use iced::{
-    Element, Event, Length, Rectangle, Size, Theme,
-    advanced::{
-        Clipboard, Layout, Shell, Widget, layout, mouse, renderer,
-        widget::{Tree, tree},
-    },
+use iced_core::{
+    Clipboard, Element, Event, Layout, Length, Padding, Point, Rectangle, Shell, Size, Theme,
+    Vector, Widget,
+    layout::{self, Node},
+    mouse, overlay, renderer,
+    widget::{Id, Operation, Tree, tree},
+    window,
 };
-use iced::{Padding, Point, Vector};
 use indexmap::IndexMap;
 
 use crate::widgets::{NavigatorElement, NavigatorElementSource, NavigatorState};
@@ -86,7 +81,7 @@ pub struct PageParams<Key> {
     pub can_go_back: bool,
 }
 
-pub struct TabsNavigator<'a, Key, Message, Renderer = iced::Renderer>
+pub struct TabsNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
 {
@@ -197,7 +192,7 @@ impl<'a, Key, Message, Renderer> Widget<Message, Theme, Renderer>
 where
     Key: Eq + Hash + Clone + 'static,
     Message: Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<Key>>()
@@ -336,7 +331,7 @@ where
                     self.height,
                     Padding::ZERO,
                     0.0,
-                    iced::Alignment::Start,
+                    iced_core::Alignment::Start,
                     &mut items,
                     &mut children[children_len - 2..],
                 );
@@ -531,7 +526,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Option<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
         if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
             let state = tree.state.downcast_ref::<State<Key>>();
 
@@ -593,7 +588,7 @@ impl<'a, Key, Message, Renderer> From<TabsNavigator<'a, Key, Message, Renderer>>
 where
     Key: 'static + Eq + Hash + Clone,
     Message: 'a + Clone,
-    Renderer: 'a + iced::advanced::Renderer,
+    Renderer: 'a + iced_core::Renderer,
 {
     fn from(tabs: TabsNavigator<'a, Key, Message, Renderer>) -> Self {
         Self::new(tabs)
@@ -605,7 +600,7 @@ pub fn tabs_navigator<'a, Key, Message, Renderer>(
 ) -> TabsNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     TabsNavigator::new(home_page)
 }

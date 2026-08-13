@@ -3,19 +3,13 @@ use std::hash::Hash;
 use std::mem::Discriminant;
 use std::ops::{Div, Neg};
 
-use iced::Padding;
-use iced::advanced::graphics::core::window;
-use iced::advanced::overlay;
-use iced::advanced::widget::Operation;
-use iced::widget::Id;
-use iced::{
-    Element, Event, Length, Rectangle, Size, Theme, Vector,
-    advanced::{
-        Clipboard, Layout, Shell, Widget, layout, mouse, renderer,
-        widget::{Tree, tree},
-    },
-    widget::container::{self, draw_background},
+use iced_core::window;
+use iced_core::{
+    Clipboard, Element, Event, Layout, Length, Padding, Rectangle, Shell, Size, Theme, Vector,
+    Widget, layout, mouse, overlay, renderer,
+    widget::{Id, Operation, Tree, tree},
 };
+use iced_widget::container::{self, draw_background};
 
 use crate::animation::Frame;
 use crate::widgets::{NavigatorElement, NavigatorElementSource, NavigatorState};
@@ -140,7 +134,7 @@ pub(crate) enum Transition {
     Back,
 }
 
-pub struct StackNavigator<'a, Key, Message, Renderer = iced::Renderer>
+pub struct StackNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
 {
@@ -238,7 +232,7 @@ impl<'a, Key, Message, Renderer> Widget<Message, Theme, Renderer>
 where
     Key: Eq + Hash + Clone + 'static,
     Message: Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<Key>>()
@@ -831,7 +825,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Option<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
         let bounds = layout.bounds();
 
         let nav_state: &State<Key> = tree.state.downcast_ref();
@@ -918,7 +912,7 @@ fn draw_layer<'a, Message, Renderer>(
     cursor: mouse::Cursor,
     viewport: &Rectangle,
 ) where
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     let background = theme.palette().background;
     let background_style = container::Style::default().background(background);
@@ -973,7 +967,7 @@ impl<'a, Key, Message, Renderer> From<StackNavigator<'a, Key, Message, Renderer>
 where
     Key: 'static + Eq + Hash + Clone,
     Message: 'a + Clone,
-    Renderer: 'a + iced::advanced::Renderer,
+    Renderer: 'a + iced_core::Renderer,
 {
     fn from(stack: StackNavigator<'a, Key, Message, Renderer>) -> Self {
         Self::new(stack)
@@ -998,7 +992,7 @@ fn resolve_page_layout<'a, Message, Theme, Renderer>(
     renderer: &Renderer,
 ) -> LayoutResult<'a, Message, Theme, Renderer>
 where
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     let mut elements = Vec::with_capacity(2);
 
@@ -1017,7 +1011,7 @@ where
         height,
         Padding::ZERO,
         0.0,
-        iced::Alignment::Start,
+        iced_core::Alignment::Start,
         &mut elements,
         &mut children[if size == 2 { header_index } else { page_index }..page_index + 1],
     );
@@ -1038,7 +1032,7 @@ pub fn stack_navigator<'a, Key, Message, Renderer>(
 ) -> StackNavigator<'a, Key, Message, Renderer>
 where
     Key: Eq + Hash + Clone,
-    Renderer: iced::advanced::Renderer,
+    Renderer: iced_core::Renderer,
 {
     StackNavigator::new(home_page)
 }

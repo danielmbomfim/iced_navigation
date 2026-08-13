@@ -1,4 +1,4 @@
-use iced::Element;
+use iced_core::Element;
 
 #[cfg(feature = "drawer")]
 pub mod drawer_navigator;
@@ -9,7 +9,7 @@ pub mod stack_navigator;
 pub mod tabs_navigator;
 
 #[allow(dead_code)]
-pub(crate) enum NavigatorElementSource<'a, Params, Message, Theme, Renderer = iced::Renderer> {
+pub(crate) enum NavigatorElementSource<'a, Params, Message, Theme, Renderer> {
     Direct(Element<'a, Message, Theme, Renderer>),
     Closure(Box<dyn Fn(Params) -> Element<'a, Message, Theme, Renderer> + 'a>),
     None,
@@ -44,7 +44,7 @@ pub(crate) trait NavigatorState {
     fn clear_history(&mut self);
 }
 
-pub(crate) struct NavigatorElement<'a, Params, Message, Theme, Renderer = iced::Renderer> {
+pub(crate) struct NavigatorElement<'a, Params, Message, Theme, Renderer> {
     source: NavigatorElementSource<'a, Params, Message, Theme, Renderer>,
     cache: Option<Element<'a, Message, Theme, Renderer>>,
     taken: bool,
@@ -68,8 +68,6 @@ impl<'a, Params, Message, Theme, Renderer> NavigatorElement<'a, Params, Message,
     }
 
     pub fn take_element(&mut self) -> Option<Element<'a, Message, Theme, Renderer>> {
-        
-
         self.cache.take().or_else(|| {
             if let NavigatorElementSource::Direct(element) =
                 std::mem::replace(&mut self.source, NavigatorElementSource::None)

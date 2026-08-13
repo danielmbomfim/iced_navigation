@@ -1,9 +1,9 @@
-use std::{hash::Hash, marker::PhantomData};
-
-use iced::{
-    Rectangle, Task,
-    advanced::widget::{Id, Operation, operate},
+use iced_core::{
+    Rectangle,
+    widget::{Id, Operation},
 };
+use iced_runtime::{Task, task::widget as operate};
+use std::{hash::Hash, marker::PhantomData};
 
 use crate::widgets::{self, NavigatorState};
 
