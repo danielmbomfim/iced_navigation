@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0](https://github.com/danielmbomfim/iced_navigation/compare/v2.0.1...v3.0.0) - 2026-08-13
+
+### Other
+
+- update README.md
+- *(deps)* replace iced dependency with individual iced crates
+- release v2.0.1
+- update iced_navigation version to 2.0.1 in README.md
+
 ## [2.0.1](https://github.com/danielmbomfim/iced_navigation/compare/v2.0.0...v2.0.1) - 2026-07-15
 
 ### Added
