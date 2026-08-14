@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use iced_core::time::{Duration, Instant};
 
 const DEFAULT_DURATION: f32 = 0.3;
 
