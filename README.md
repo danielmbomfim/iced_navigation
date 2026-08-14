@@ -26,7 +26,7 @@ To use `iced_navigation`, add it to your `Cargo.toml`:
 ```toml
 [dependencies]
 iced = "0.14"
-iced_navigation = "3.0.0"
+iced_navigation = "3.0.1"
 ```
 
 ## Usage
