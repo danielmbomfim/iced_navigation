@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1](https://github.com/danielmbomfim/iced_navigation/compare/v3.0.0...v3.0.1) - 2026-08-14
+
+### Fixed
+
+- replaces std::time with iced_code::time to fix crash on wasm
+
+### Other
+
+- update README.md
+
 ## [3.0.0](https://github.com/danielmbomfim/iced_navigation/compare/v2.0.1...v3.0.0) - 2026-08-13
 
 ### Other
